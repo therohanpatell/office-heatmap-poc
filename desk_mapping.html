@@ -213,6 +213,44 @@
             box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
         }
 
+        .initials-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .initials-group {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e6ed;
+        }
+
+        .initials-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+        }
+
+        .initials-group input {
+            font-size: 12px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+        }
+
+        .preview-id {
+            background: rgba(52, 152, 219, 0.1);
+            color: #2c3e50;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+        }
+
         .button {
             width: 100%;
             padding: 12px 20px;
@@ -411,6 +449,31 @@
             margin-bottom: 5px;
         }
 
+        .current-mapping {
+            background: #e8f5e8;
+            border: 1px solid #4caf50;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .current-mapping h4 {
+            color: #2e7d32;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .next-id {
+            background: rgba(76, 175, 80, 0.1);
+            color: #2e7d32;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            border: 2px solid rgba(76, 175, 80, 0.3);
+        }
+
         @media (max-width: 1200px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -425,6 +488,10 @@
             .zoom-controls {
                 flex-wrap: wrap;
             }
+
+            .initials-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -432,7 +499,7 @@
     <div class="container">
         <div class="header">
             <h1>🗺️ Office Coordinate Mapping Tool</h1>
-            <p>Draw boxes on your floorplan to map desks and meeting rooms with precise coordinates</p>
+            <p>Auto-generate unique IDs while mapping desks and meeting rooms with precise coordinates</p>
         </div>
 
         <div class="main-content">
@@ -465,24 +532,40 @@
                     </div>
                 </div>
 
-                <div class="drawing-mode-info" id="drawingInfo">
-                    <strong>Drawing Mode Instructions:</strong>
-                    1. Enter ID and select type below<br>
-                    2. Click and drag on the floorplan to draw a box<br>
-                    3. Release to create the mapped area
+                <div class="form-group">
+                    <label>Set ID Prefixes (Set Once)</label>
+                    <div class="initials-grid">
+                        <div class="initials-group">
+                            <label>Desk Prefix</label>
+                            <input type="text" id="deskPrefix" placeholder="D" maxlength="5" value="D">
+                            <div class="preview-id" id="deskPreview">Next: D-001</div>
+                        </div>
+                        <div class="initials-group">
+                            <label>Meeting Room Prefix</label>
+                            <input type="text" id="meetingPrefix" placeholder="MR" maxlength="5" value="MR">
+                            <div class="preview-id" id="meetingPreview">Next: MR-001</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="current-mapping" id="currentMapping">
+                    <h4>Currently Mapping: <span id="currentType">Desk</span></h4>
+                    <div class="next-id" id="nextId">Next ID: D-001</div>
                 </div>
 
                 <div class="form-group">
-                    <label for="itemId">ID (e.g., D-101, MR-A)</label>
-                    <input type="text" id="itemId" placeholder="Enter unique ID">
-                </div>
-
-                <div class="form-group">
-                    <label for="itemType">Type</label>
-                    <select id="itemType">
+                    <label for="itemType">Mapping Type</label>
+                    <select id="itemType" onchange="updateCurrentMapping()">
                         <option value="desk">Desk</option>
                         <option value="meeting-room">Meeting Room</option>
                     </select>
+                </div>
+
+                <div class="drawing-mode-info" id="drawingInfo">
+                    <strong>Auto ID Mode:</strong>
+                    1. Select mapping type above<br>
+                    2. Simply click and drag on the floorplan<br>
+                    3. ID will be auto-generated sequentially
                 </div>
 
                 <button class="button button-warning" onclick="toggleMode()">
@@ -546,9 +629,83 @@
         let currentZoom = 1;
         let drawingBox = null;
 
+        // Counters for auto ID generation
+        let deskCounter = 1;
+        let meetingRoomCounter = 1;
+
         // File input handlers
         document.getElementById('floorplanInput').addEventListener('change', handleFloorplanUpload);
         document.getElementById('csvInput').addEventListener('change', handleCSVUpload);
+
+        // Prefix input handlers
+        document.getElementById('deskPrefix').addEventListener('input', updatePreviews);
+        document.getElementById('meetingPrefix').addEventListener('input', updatePreviews);
+
+        function updatePreviews() {
+            const deskPrefix = document.getElementById('deskPrefix').value || 'D';
+            const meetingPrefix = document.getElementById('meetingPrefix').value || 'MR';
+
+            document.getElementById('deskPreview').textContent = `Next: ${deskPrefix}-${String(deskCounter).padStart(3, '0')}`;
+            document.getElementById('meetingPreview').textContent = `Next: ${meetingPrefix}-${String(meetingRoomCounter).padStart(3, '0')}`;
+
+            updateCurrentMapping();
+        }
+
+        function updateCurrentMapping() {
+            const itemType = document.getElementById('itemType').value;
+            const deskPrefix = document.getElementById('deskPrefix').value || 'D';
+            const meetingPrefix = document.getElementById('meetingPrefix').value || 'MR';
+
+            if (itemType === 'desk') {
+                document.getElementById('currentType').textContent = 'Desk';
+                document.getElementById('nextId').textContent = `Next ID: ${deskPrefix}-${String(deskCounter).padStart(3, '0')}`;
+            } else {
+                document.getElementById('currentType').textContent = 'Meeting Room';
+                document.getElementById('nextId').textContent = `Next ID: ${meetingPrefix}-${String(meetingRoomCounter).padStart(3, '0')}`;
+            }
+        }
+
+        function generateNextId(type) {
+            const deskPrefix = document.getElementById('deskPrefix').value || 'D';
+            const meetingPrefix = document.getElementById('meetingPrefix').value || 'MR';
+
+            if (type === 'desk') {
+                const id = `${deskPrefix}-${String(deskCounter).padStart(3, '0')}`;
+                deskCounter++;
+                return id;
+            } else {
+                const id = `${meetingPrefix}-${String(meetingRoomCounter).padStart(3, '0')}`;
+                meetingRoomCounter++;
+                return id;
+            }
+        }
+
+        function updateCountersFromData() {
+            const deskPrefix = document.getElementById('deskPrefix').value || 'D';
+            const meetingPrefix = document.getElementById('meetingPrefix').value || 'MR';
+
+            let maxDeskNum = 0;
+            let maxMeetingNum = 0;
+
+            coordinateData.forEach(item => {
+                if (item.type === 'desk' && item.id.startsWith(deskPrefix + '-')) {
+                    const num = parseInt(item.id.split('-')[1]);
+                    if (!isNaN(num) && num > maxDeskNum) {
+                        maxDeskNum = num;
+                    }
+                } else if (item.type === 'meeting-room' && item.id.startsWith(meetingPrefix + '-')) {
+                    const num = parseInt(item.id.split('-')[1]);
+                    if (!isNaN(num) && num > maxMeetingNum) {
+                        maxMeetingNum = num;
+                    }
+                }
+            });
+
+            deskCounter = maxDeskNum + 1;
+            meetingRoomCounter = maxMeetingNum + 1;
+
+            updatePreviews();
+        }
 
         function handleFloorplanUpload(event) {
             const file = event.target.files[0];
@@ -638,28 +795,21 @@
             if (width > 1 && height > 1) {
                 const left = Math.min(startX, endX);
                 const top = Math.min(startY, endY);
-
-                const id = document.getElementById('itemId').value.trim();
                 const type = document.getElementById('itemType').value;
+                const id = generateNextId(type);
 
-                if (!id) {
-                    alert('Please enter an ID for this area');
-                } else if (coordinateData.find(item => item.id === id)) {
-                    alert('ID already exists. Please use a unique ID.');
-                } else {
-                    coordinateData.push({
-                        id: id,
-                        type: type,
-                        x: parseFloat(left.toFixed(2)),
-                        y: parseFloat(top.toFixed(2)),
-                        width: parseFloat(width.toFixed(2)),
-                        height: parseFloat(height.toFixed(2))
-                    });
+                coordinateData.push({
+                    id: id,
+                    type: type,
+                    x: parseFloat(left.toFixed(2)),
+                    y: parseFloat(top.toFixed(2)),
+                    width: parseFloat(width.toFixed(2)),
+                    height: parseFloat(height.toFixed(2))
+                });
 
-                    document.getElementById('itemId').value = '';
-                    updateTable();
-                    redrawAreas();
-                }
+                updateTable();
+                redrawAreas();
+                updateCurrentMapping();
             }
 
             // Clean up
@@ -714,8 +864,8 @@
 
             // Populate form with selected area data
             const item = coordinateData[index];
-            document.getElementById('itemId').value = item.id;
             document.getElementById('itemType').value = item.type;
+            updateCurrentMapping();
         }
 
         function toggleMode() {
@@ -723,17 +873,14 @@
             const modeIndicator = document.getElementById('modeIndicator');
             const modeButton = document.getElementById('modeButtonText');
             const drawingInfo = document.getElementById('drawingInfo');
+            const currentMapping = document.getElementById('currentMapping');
 
             if (isEditMode) {
                 modeIndicator.textContent = 'Edit Mode: Click areas to modify';
-                modeButton.textContent = 'Switch to Drawing Mode';
-                drawingInfo.style.display = 'none';
-            } else {
-                modeIndicator.textContent = 'Drawing Mode: Click and drag to draw boxes';
                 modeButton.textContent = 'Switch to Edit Mode';
                 drawingInfo.style.display = 'block';
+                currentMapping.style.display = 'block';
                 selectedAreaIndex = -1;
-                document.getElementById('itemId').value = '';
             }
 
             redrawAreas();
@@ -794,6 +941,10 @@
                 updateTable();
                 redrawAreas();
                 selectedAreaIndex = -1;
+                // Reset counters
+                deskCounter = 1;
+                meetingRoomCounter = 1;
+                updatePreviews();
             }
         }
 
@@ -855,58 +1006,21 @@
 
             updateTable();
             redrawAreas();
+            updateCountersFromData();
             alert(`Loaded ${coordinateData.length} coordinate areas`);
         }
-
-        // Update edit mode functionality
-        function updateArea() {
-            if (selectedAreaIndex >= 0) {
-                const id = document.getElementById('itemId').value.trim();
-                const type = document.getElementById('itemType').value;
-
-                if (!id) {
-                    alert('Please enter an ID');
-                    return;
-                }
-
-                // Check for duplicate ID (excluding current item)
-                const existingItem = coordinateData.find((item, index) =>
-                    item.id === id && index !== selectedAreaIndex
-                );
-
-                if (existingItem) {
-                    alert('ID already exists. Please use a unique ID.');
-                    return;
-                }
-
-                coordinateData[selectedAreaIndex].id = id;
-                coordinateData[selectedAreaIndex].type = type;
-
-                updateTable();
-                redrawAreas();
-                selectedAreaIndex = -1;
-                document.getElementById('itemId').value = '';
-            }
-        }
-
-        // Add update functionality to the edit mode
-        document.getElementById('itemId').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && isEditMode && selectedAreaIndex >= 0) {
-                updateArea();
-            }
-        });
-
-        document.getElementById('itemType').addEventListener('change', function() {
-            if (isEditMode && selectedAreaIndex >= 0) {
-                updateArea();
-            }
-        });
 
         // Prevent text selection during drawing
         document.addEventListener('selectstart', function(e) {
             if (isDrawing) {
                 e.preventDefault();
             }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updatePreviews();
+            updateCurrentMapping();
         });
     </script>
 </body>
