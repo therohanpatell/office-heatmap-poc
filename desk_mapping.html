@@ -135,7 +135,6 @@
 
         .coordinate-box {
             position: absolute;
-            border: 3px solid;
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 10;
@@ -146,22 +145,28 @@
             font-weight: bold;
             color: white;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-            background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(2px);
         }
 
-        .coordinate-box:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        .coordinate-box.desk {
+            border: 3px solid #3498db;
+            background: rgba(52, 152, 219, 0.2);
+            border-radius: 50%;
+            width: 10px !important;  /* Reduced from 30px */
+            height: 10px !important; /* Reduced from 30px */
+            transform: translate(-10px, -10px); /* Adjusted for new size */
         }
 
-        .coordinate-box.desk {
-            border-color: #3498db;
-            background: rgba(52, 152, 219, 0.2);
+        .coordinate-box.desk::after {
+            content: "";
+            font-size: 18px;         /* Reduced from 24px */
+            position: absolute;
+            top: -5px;               /* Adjusted positioning */
+            left: -5px;              /* Adjusted positioning */
         }
 
         .coordinate-box.meeting-room {
-            border-color: #e74c3c;
+            border: 3px solid #e74c3c;
             background: rgba(231, 76, 60, 0.2);
         }
 
@@ -744,6 +749,32 @@
         }
 
         function handleMouseDown(event) {
+            const itemType = document.getElementById('itemType').value;
+
+            if (itemType === 'desk') {
+                // Handle desk click
+                const rect = event.currentTarget.getBoundingClientRect();
+                const x = ((event.clientX - rect.left) / rect.width * 100);
+                const y = ((event.clientY - rect.top) / rect.height * 100);
+
+                const id = generateNextId('desk');
+
+                coordinateData.push({
+                    id: id,
+                    type: 'desk',
+                    x: parseFloat(x.toFixed(2)),
+                    y: parseFloat(y.toFixed(2)),
+                    width: 2,  // Fixed size for point marker
+                    height: 2  // Fixed size for point marker
+                });
+
+                updateTable();
+                redrawAreas();
+                updateCurrentMapping();
+                return;
+            }
+
+            // Only for meeting rooms - existing drawing logic
             if (isEditMode) return;
 
             const rect = event.currentTarget.getBoundingClientRect();
@@ -764,7 +795,7 @@
         }
 
         function handleMouseMove(event) {
-            if (!isDrawing || !drawingBox) return;
+            if (!isDrawing || !drawingBox || document.getElementById('itemType').value === 'desk') return;
 
             const rect = event.currentTarget.getBoundingClientRect();
             const currentX = ((event.clientX - rect.left) / rect.width * 100);
@@ -782,6 +813,7 @@
         }
 
         function handleMouseUp(event) {
+            if (document.getElementById('itemType').value === 'desk') return;
             if (!isDrawing || !drawingBox) return;
 
             const rect = event.currentTarget.getBoundingClientRect();
@@ -877,6 +909,11 @@
 
             if (isEditMode) {
                 modeIndicator.textContent = 'Edit Mode: Click areas to modify';
+                modeButton.textContent = 'Switch to Drawing Mode';
+                drawingInfo.style.display = 'none';
+                currentMapping.style.display = 'none';
+            } else {
+                modeIndicator.textContent = 'Drawing Mode: Click and drag to draw boxes';
                 modeButton.textContent = 'Switch to Edit Mode';
                 drawingInfo.style.display = 'block';
                 currentMapping.style.display = 'block';
@@ -886,7 +923,6 @@
             redrawAreas();
         }
 
-        // Zoom functions
         function zoomIn() {
             currentZoom = Math.min(currentZoom * 1.2, 5);
             applyZoom();
@@ -933,6 +969,7 @@
             updateTable();
             redrawAreas();
             selectedAreaIndex = -1;
+            updateCountersFromData();
         }
 
         function clearAll() {
@@ -941,7 +978,6 @@
                 updateTable();
                 redrawAreas();
                 selectedAreaIndex = -1;
-                // Reset counters
                 deskCounter = 1;
                 meetingRoomCounter = 1;
                 updatePreviews();
@@ -1009,13 +1045,6 @@
             updateCountersFromData();
             alert(`Loaded ${coordinateData.length} coordinate areas`);
         }
-
-        // Prevent text selection during drawing
-        document.addEventListener('selectstart', function(e) {
-            if (isDrawing) {
-                e.preventDefault();
-            }
-        });
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
