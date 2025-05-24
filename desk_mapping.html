@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
@@ -48,10 +48,10 @@
 
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 350px;
+            grid-template-columns: 1fr 380px;
             gap: 20px;
             padding: 30px;
-            min-height: 600px;
+            min-height: 700px;
         }
 
         .map-container {
@@ -63,10 +63,52 @@
             box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
         }
 
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .zoom-controls {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .zoom-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .zoom-btn:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .zoom-level {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+        }
+
         .floorplan-wrapper {
             position: relative;
             width: 100%;
-            height: 500px;
+            height: 580px;
             overflow: auto;
             border: 2px dashed #cbd5e0;
             border-radius: 10px;
@@ -79,51 +121,62 @@
         .floorplan-canvas {
             position: relative;
             cursor: crosshair;
-            max-width: 100%;
-            max-height: 100%;
+            transition: transform 0.2s ease;
+            transform-origin: 0 0;
         }
 
         .floorplan-canvas img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
+            display: block;
+            max-width: none;
+            height: auto;
+            user-select: none;
+            -webkit-user-drag: none;
         }
 
-        .coordinate-point {
+        .coordinate-box {
             position: absolute;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 3px solid white;
+            border: 3px solid;
             cursor: pointer;
-            transform: translate(-50%, -50%);
             transition: all 0.3s ease;
             z-index: 10;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: bold;
             color: white;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(2px);
         }
 
-        .coordinate-point:hover {
-            transform: translate(-50%, -50%) scale(1.3);
+        .coordinate-box:hover {
+            transform: scale(1.05);
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
         }
 
-        .coordinate-point.desk {
-            background: #3498db;
+        .coordinate-box.desk {
+            border-color: #3498db;
+            background: rgba(52, 152, 219, 0.2);
         }
 
-        .coordinate-point.meeting-room {
-            background: #e74c3c;
+        .coordinate-box.meeting-room {
+            border-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.2);
         }
 
-        .coordinate-point.selected {
+        .coordinate-box.selected {
             border-color: #f39c12;
             box-shadow: 0 0 15px rgba(243, 156, 18, 0.6);
+            background: rgba(243, 156, 18, 0.2);
+        }
+
+        .drawing-box {
+            position: absolute;
+            border: 2px dashed #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+            pointer-events: none;
+            z-index: 5;
         }
 
         .control-panel {
@@ -202,6 +255,16 @@
             box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
         }
 
+        .button-warning {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .button-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+        }
+
         .file-input-wrapper {
             position: relative;
             overflow: hidden;
@@ -232,7 +295,7 @@
         }
 
         .data-table {
-            max-height: 200px;
+            max-height: 250px;
             overflow-y: auto;
             border: 1px solid #e0e6ed;
             border-radius: 8px;
@@ -245,10 +308,10 @@
         }
 
         .data-table th, .data-table td {
-            padding: 8px 12px;
+            padding: 8px 10px;
             text-align: left;
             border-bottom: 1px solid #e0e6ed;
-            font-size: 12px;
+            font-size: 11px;
         }
 
         .data-table th {
@@ -293,6 +356,7 @@
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            z-index: 20;
         }
 
         .legend {
@@ -317,19 +381,49 @@
         .legend-color {
             width: 16px;
             height: 16px;
-            border-radius: 50%;
+            border: 2px solid;
             margin-right: 10px;
-            border: 2px solid white;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
-        @media (max-width: 768px) {
+        .legend-color.desk {
+            border-color: #3498db;
+            background: rgba(52, 152, 219, 0.3);
+        }
+
+        .legend-color.meeting-room {
+            border-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.3);
+        }
+
+        .drawing-mode-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #856404;
+        }
+
+        .drawing-mode-info strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 1200px) {
             .main-content {
                 grid-template-columns: 1fr;
             }
+        }
 
+        @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
+            }
+
+            .zoom-controls {
+                flex-wrap: wrap;
             }
         }
     </style>
@@ -338,12 +432,20 @@
     <div class="container">
         <div class="header">
             <h1>🗺️ Office Coordinate Mapping Tool</h1>
-            <p>Click on your floorplan to tag desks and meeting rooms with precise coordinates</p>
+            <p>Draw boxes on your floorplan to map desks and meeting rooms with precise coordinates</p>
         </div>
 
         <div class="main-content">
             <div class="map-container">
-                <div class="mode-indicator" id="modeIndicator">Click Mode: Add New Points</div>
+                <div class="map-controls">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoomOut()">−</button>
+                        <div class="zoom-level" id="zoomLevel">100%</div>
+                        <button class="zoom-btn" onclick="zoomIn()">+</button>
+                        <button class="zoom-btn" onclick="resetZoom()" style="width: auto; padding: 0 12px; font-size: 12px;">Reset</button>
+                    </div>
+                </div>
+                <div class="mode-indicator" id="modeIndicator">Drawing Mode: Click and drag to draw boxes</div>
                 <div class="floorplan-wrapper" id="floorplanWrapper">
                     <div class="upload-placeholder">
                         <strong>Upload your floorplan image to begin mapping</strong><br>
@@ -363,6 +465,13 @@
                     </div>
                 </div>
 
+                <div class="drawing-mode-info" id="drawingInfo">
+                    <strong>Drawing Mode Instructions:</strong>
+                    1. Enter ID and select type below<br>
+                    2. Click and drag on the floorplan to draw a box<br>
+                    3. Release to create the mapped area
+                </div>
+
                 <div class="form-group">
                     <label for="itemId">ID (e.g., D-101, MR-A)</label>
                     <input type="text" id="itemId" placeholder="Enter unique ID">
@@ -376,11 +485,11 @@
                     </select>
                 </div>
 
-                <button class="button button-primary" onclick="toggleMode()">
+                <button class="button button-warning" onclick="toggleMode()">
                     <span id="modeButtonText">Switch to Edit Mode</span>
                 </button>
 
-                <button class="button button-secondary" onclick="clearAll()">Clear All Points</button>
+                <button class="button button-secondary" onclick="clearAll()">Clear All Areas</button>
 
                 <button class="button button-success" onclick="downloadCSV()">📥 Download CSV</button>
 
@@ -397,12 +506,12 @@
                 <div class="legend">
                     <h4>Legend</h4>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #3498db;"></div>
-                        <span>Desk</span>
+                        <div class="legend-color desk"></div>
+                        <span>Desk Area</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: #e74c3c;"></div>
-                        <span>Meeting Room</span>
+                        <div class="legend-color meeting-room"></div>
+                        <span>Meeting Room Area</span>
                     </div>
                 </div>
 
@@ -414,6 +523,8 @@
                                 <th>Type</th>
                                 <th>X</th>
                                 <th>Y</th>
+                                <th>W</th>
+                                <th>H</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -429,7 +540,11 @@
         let coordinateData = [];
         let floorplanImage = null;
         let isEditMode = false;
-        let selectedPointIndex = -1;
+        let selectedAreaIndex = -1;
+        let isDrawing = false;
+        let startX, startY;
+        let currentZoom = 1;
+        let drawingBox = null;
 
         // File input handlers
         document.getElementById('floorplanInput').addEventListener('change', handleFloorplanUpload);
@@ -457,78 +572,147 @@
 
         function setupCanvas() {
             const canvas = document.getElementById('floorplanCanvas');
-            canvas.addEventListener('click', handleCanvasClick);
-            redrawPoints();
+            const img = canvas.querySelector('img');
+
+            // Set initial size
+            resetZoom();
+
+            // Add mouse event listeners
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp);
+
+            redrawAreas();
         }
 
-        function handleCanvasClick(event) {
-            if (!isEditMode) {
-                const rect = event.currentTarget.getBoundingClientRect();
-                const x = ((event.clientX - rect.left) / rect.width * 100).toFixed(2);
-                const y = ((event.clientY - rect.top) / rect.height * 100).toFixed(2);
+        function handleMouseDown(event) {
+            if (isEditMode) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            startX = ((event.clientX - rect.left) / rect.width * 100);
+            startY = ((event.clientY - rect.top) / rect.height * 100);
+
+            isDrawing = true;
+
+            // Create temporary drawing box
+            drawingBox = document.createElement('div');
+            drawingBox.className = 'drawing-box';
+            drawingBox.style.left = startX + '%';
+            drawingBox.style.top = startY + '%';
+            drawingBox.style.width = '0%';
+            drawingBox.style.height = '0%';
+
+            event.currentTarget.appendChild(drawingBox);
+        }
+
+        function handleMouseMove(event) {
+            if (!isDrawing || !drawingBox) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const currentX = ((event.clientX - rect.left) / rect.width * 100);
+            const currentY = ((event.clientY - rect.top) / rect.height * 100);
+
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
+            const left = Math.min(startX, currentX);
+            const top = Math.min(startY, currentY);
+
+            drawingBox.style.left = left + '%';
+            drawingBox.style.top = top + '%';
+            drawingBox.style.width = width + '%';
+            drawingBox.style.height = height + '%';
+        }
+
+        function handleMouseUp(event) {
+            if (!isDrawing || !drawingBox) return;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const endX = ((event.clientX - rect.left) / rect.width * 100);
+            const endY = ((event.clientY - rect.top) / rect.height * 100);
+
+            const width = Math.abs(endX - startX);
+            const height = Math.abs(endY - startY);
+
+            // Only create area if box is large enough
+            if (width > 1 && height > 1) {
+                const left = Math.min(startX, endX);
+                const top = Math.min(startY, endY);
 
                 const id = document.getElementById('itemId').value.trim();
                 const type = document.getElementById('itemType').value;
 
                 if (!id) {
-                    alert('Please enter an ID for this point');
-                    return;
-                }
-
-                if (coordinateData.find(item => item.id === id)) {
+                    alert('Please enter an ID for this area');
+                } else if (coordinateData.find(item => item.id === id)) {
                     alert('ID already exists. Please use a unique ID.');
-                    return;
+                } else {
+                    coordinateData.push({
+                        id: id,
+                        type: type,
+                        x: parseFloat(left.toFixed(2)),
+                        y: parseFloat(top.toFixed(2)),
+                        width: parseFloat(width.toFixed(2)),
+                        height: parseFloat(height.toFixed(2))
+                    });
+
+                    document.getElementById('itemId').value = '';
+                    updateTable();
+                    redrawAreas();
                 }
-
-                coordinateData.push({
-                    id: id,
-                    type: type,
-                    x: parseFloat(x),
-                    y: parseFloat(y)
-                });
-
-                document.getElementById('itemId').value = '';
-                updateTable();
-                redrawPoints();
             }
+
+            // Clean up
+            if (drawingBox) {
+                drawingBox.remove();
+                drawingBox = null;
+            }
+            isDrawing = false;
         }
 
-        function redrawPoints() {
+        function redrawAreas() {
             const canvas = document.getElementById('floorplanCanvas');
             if (!canvas) return;
 
-            // Remove existing points
-            const existingPoints = canvas.querySelectorAll('.coordinate-point');
-            existingPoints.forEach(point => point.remove());
+            // Remove existing areas
+            const existingAreas = canvas.querySelectorAll('.coordinate-box');
+            existingAreas.forEach(area => area.remove());
 
-            // Add all points
+            // Add all areas
             coordinateData.forEach((item, index) => {
-                const point = document.createElement('div');
-                point.className = `coordinate-point ${item.type}`;
-                point.style.left = `${item.x}%`;
-                point.style.top = `${item.y}%`;
-                point.title = `${item.id} (${item.type})`;
-                point.textContent = item.id.length > 4 ? item.id.substring(0, 3) + '...' : item.id;
+                const area = document.createElement('div');
+                area.className = `coordinate-box ${item.type}`;
+                area.style.left = `${item.x}%`;
+                area.style.top = `${item.y}%`;
+                area.style.width = `${item.width}%`;
+                area.style.height = `${item.height}%`;
+                area.title = `${item.id} (${item.type})`;
+
+                // Add label
+                const label = document.createElement('div');
+                label.textContent = item.id.length > 8 ? item.id.substring(0, 6) + '...' : item.id;
+                label.style.fontSize = Math.max(8, Math.min(14, item.width * 0.8)) + 'px';
+                area.appendChild(label);
 
                 if (isEditMode) {
-                    point.addEventListener('click', (e) => {
+                    area.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        selectPoint(index);
+                        selectArea(index);
                     });
                 }
 
-                canvas.appendChild(point);
+                canvas.appendChild(area);
             });
         }
 
-        function selectPoint(index) {
-            selectedPointIndex = index;
-            const points = document.querySelectorAll('.coordinate-point');
-            points.forEach((point, i) => {
-                point.classList.toggle('selected', i === index);
+        function selectArea(index) {
+            selectedAreaIndex = index;
+            const areas = document.querySelectorAll('.coordinate-box');
+            areas.forEach((area, i) => {
+                area.classList.toggle('selected', i === index);
             });
 
-            // Populate form with selected point data
+            // Populate form with selected area data
             const item = coordinateData[index];
             document.getElementById('itemId').value = item.id;
             document.getElementById('itemType').value = item.type;
@@ -538,18 +722,45 @@
             isEditMode = !isEditMode;
             const modeIndicator = document.getElementById('modeIndicator');
             const modeButton = document.getElementById('modeButtonText');
+            const drawingInfo = document.getElementById('drawingInfo');
 
             if (isEditMode) {
-                modeIndicator.textContent = 'Edit Mode: Click points to modify';
-                modeButton.textContent = 'Switch to Add Mode';
+                modeIndicator.textContent = 'Edit Mode: Click areas to modify';
+                modeButton.textContent = 'Switch to Drawing Mode';
+                drawingInfo.style.display = 'none';
             } else {
-                modeIndicator.textContent = 'Click Mode: Add New Points';
+                modeIndicator.textContent = 'Drawing Mode: Click and drag to draw boxes';
                 modeButton.textContent = 'Switch to Edit Mode';
-                selectedPointIndex = -1;
+                drawingInfo.style.display = 'block';
+                selectedAreaIndex = -1;
                 document.getElementById('itemId').value = '';
             }
 
-            redrawPoints();
+            redrawAreas();
+        }
+
+        // Zoom functions
+        function zoomIn() {
+            currentZoom = Math.min(currentZoom * 1.2, 5);
+            applyZoom();
+        }
+
+        function zoomOut() {
+            currentZoom = Math.max(currentZoom / 1.2, 0.2);
+            applyZoom();
+        }
+
+        function resetZoom() {
+            currentZoom = 1;
+            applyZoom();
+        }
+
+        function applyZoom() {
+            const canvas = document.getElementById('floorplanCanvas');
+            if (canvas) {
+                canvas.style.transform = `scale(${currentZoom})`;
+                document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
+            }
         }
 
         function updateTable() {
@@ -563,24 +774,26 @@
                     <td>${item.type}</td>
                     <td>${item.x}</td>
                     <td>${item.y}</td>
-                    <td><button class="delete-btn" onclick="deletePoint(${index})">×</button></td>
+                    <td>${item.width}</td>
+                    <td>${item.height}</td>
+                    <td><button class="delete-btn" onclick="deleteArea(${index})">×</button></td>
                 `;
             });
         }
 
-        function deletePoint(index) {
+        function deleteArea(index) {
             coordinateData.splice(index, 1);
             updateTable();
-            redrawPoints();
-            selectedPointIndex = -1;
+            redrawAreas();
+            selectedAreaIndex = -1;
         }
 
         function clearAll() {
-            if (confirm('Are you sure you want to clear all points?')) {
+            if (confirm('Are you sure you want to clear all areas?')) {
                 coordinateData = [];
                 updateTable();
-                redrawPoints();
-                selectedPointIndex = -1;
+                redrawAreas();
+                selectedAreaIndex = -1;
             }
         }
 
@@ -590,11 +803,11 @@
                 return;
             }
 
-            const headers = ['ID', 'Type', 'X_Coord', 'Y_Coord'];
+            const headers = ['ID', 'Type', 'X_Coord', 'Y_Coord', 'Width', 'Height'];
             const csvContent = [
                 headers.join(','),
                 ...coordinateData.map(item =>
-                    `${item.id},${item.type},${item.x},${item.y}`
+                    `${item.id},${item.type},${item.x},${item.y},${item.width},${item.height}`
                 )
             ].join('\n');
 
@@ -628,24 +841,26 @@
 
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(',');
-                if (values.length >= 4 && values[0].trim()) {
+                if (values.length >= 6 && values[0].trim()) {
                     coordinateData.push({
                         id: values[0].trim(),
                         type: values[1].trim(),
                         x: parseFloat(values[2]),
-                        y: parseFloat(values[3])
+                        y: parseFloat(values[3]),
+                        width: parseFloat(values[4]),
+                        height: parseFloat(values[5])
                     });
                 }
             }
 
             updateTable();
-            redrawPoints();
-            alert(`Loaded ${coordinateData.length} coordinate points`);
+            redrawAreas();
+            alert(`Loaded ${coordinateData.length} coordinate areas`);
         }
 
         // Update edit mode functionality
-        function updatePoint() {
-            if (selectedPointIndex >= 0) {
+        function updateArea() {
+            if (selectedAreaIndex >= 0) {
                 const id = document.getElementById('itemId').value.trim();
                 const type = document.getElementById('itemType').value;
 
@@ -656,7 +871,7 @@
 
                 // Check for duplicate ID (excluding current item)
                 const existingItem = coordinateData.find((item, index) =>
-                    item.id === id && index !== selectedPointIndex
+                    item.id === id && index !== selectedAreaIndex
                 );
 
                 if (existingItem) {
@@ -664,26 +879,33 @@
                     return;
                 }
 
-                coordinateData[selectedPointIndex].id = id;
-                coordinateData[selectedPointIndex].type = type;
+                coordinateData[selectedAreaIndex].id = id;
+                coordinateData[selectedAreaIndex].type = type;
 
                 updateTable();
-                redrawPoints();
-                selectedPointIndex = -1;
+                redrawAreas();
+                selectedAreaIndex = -1;
                 document.getElementById('itemId').value = '';
             }
         }
 
         // Add update functionality to the edit mode
         document.getElementById('itemId').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && isEditMode && selectedPointIndex >= 0) {
-                updatePoint();
+            if (e.key === 'Enter' && isEditMode && selectedAreaIndex >= 0) {
+                updateArea();
             }
         });
 
         document.getElementById('itemType').addEventListener('change', function() {
-            if (isEditMode && selectedPointIndex >= 0) {
-                updatePoint();
+            if (isEditMode && selectedAreaIndex >= 0) {
+                updateArea();
+            }
+        });
+
+        // Prevent text selection during drawing
+        document.addEventListener('selectstart', function(e) {
+            if (isDrawing) {
+                e.preventDefault();
             }
         });
     </script>
