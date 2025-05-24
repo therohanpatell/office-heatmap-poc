@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Coordinate Mapping Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            padding: 30px;
+            min-height: 600px;
+        }
+
+        .map-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .floorplan-wrapper {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            overflow: auto;
+            border: 2px dashed #cbd5e0;
+            border-radius: 10px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .floorplan-canvas {
+            position: relative;
+            cursor: crosshair;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .floorplan-canvas img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .coordinate-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .coordinate-point:hover {
+            transform: translate(-50%, -50%) scale(1.3);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .coordinate-point.desk {
+            background: #3498db;
+        }
+
+        .coordinate-point.meeting-room {
+            background: #e74c3c;
+        }
+
+        .coordinate-point.selected {
+            border-color: #f39c12;
+            box-shadow: 0 0 15px rgba(243, 156, 18, 0.6);
+        }
+
+        .control-panel {
+            background: #ffffff;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e6ed;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .button {
+            width: 100%;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .button-primary {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .button-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .button-secondary {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+        }
+
+        .button-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(149, 165, 166, 0.4);
+        }
+
+        .button-success {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+        }
+
+        .button-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 12px;
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #3498db;
+            font-weight: 600;
+        }
+
+        .file-input-label:hover {
+            background: rgba(52, 152, 219, 0.1);
+            border-color: #2980b9;
+        }
+
+        .data-table {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e0e6ed;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .data-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th, .data-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e6ed;
+            font-size: 12px;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .data-table tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+        }
+
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+
+        .upload-placeholder {
+            color: #7f8c8d;
+            font-style: italic;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .mode-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .legend {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+
+        .legend h4 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ Office Coordinate Mapping Tool</h1>
+            <p>Click on your floorplan to tag desks and meeting rooms with precise coordinates</p>
+        </div>
+
+        <div class="main-content">
+            <div class="map-container">
+                <div class="mode-indicator" id="modeIndicator">Click Mode: Add New Points</div>
+                <div class="floorplan-wrapper" id="floorplanWrapper">
+                    <div class="upload-placeholder">
+                        <strong>Upload your floorplan image to begin mapping</strong><br>
+                        <small>Supported formats: JPG, PNG, GIF</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <div class="form-group">
+                    <label>Upload Floorplan Image</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="floorplanInput" accept="image/*">
+                        <label for="floorplanInput" class="file-input-label">
+                            📁 Choose Floorplan Image
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="itemId">ID (e.g., D-101, MR-A)</label>
+                    <input type="text" id="itemId" placeholder="Enter unique ID">
+                </div>
+
+                <div class="form-group">
+                    <label for="itemType">Type</label>
+                    <select id="itemType">
+                        <option value="desk">Desk</option>
+                        <option value="meeting-room">Meeting Room</option>
+                    </select>
+                </div>
+
+                <button class="button button-primary" onclick="toggleMode()">
+                    <span id="modeButtonText">Switch to Edit Mode</span>
+                </button>
+
+                <button class="button button-secondary" onclick="clearAll()">Clear All Points</button>
+
+                <button class="button button-success" onclick="downloadCSV()">📥 Download CSV</button>
+
+                <div class="form-group">
+                    <label>Load Existing Mapping</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="csvInput" accept=".csv">
+                        <label for="csvInput" class="file-input-label">
+                            📄 Load CSV File
+                        </label>
+                    </div>
+                </div>
+
+                <div class="legend">
+                    <h4>Legend</h4>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #3498db;"></div>
+                        <span>Desk</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #e74c3c;"></div>
+                        <span>Meeting Room</span>
+                    </div>
+                </div>
+
+                <div class="data-table" id="dataTable">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Type</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let coordinateData = [];
+        let floorplanImage = null;
+        let isEditMode = false;
+        let selectedPointIndex = -1;
+
+        // File input handlers
+        document.getElementById('floorplanInput').addEventListener('change', handleFloorplanUpload);
+        document.getElementById('csvInput').addEventListener('change', handleCSVUpload);
+
+        function handleFloorplanUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    loadFloorplan(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function loadFloorplan(imageSrc) {
+            const wrapper = document.getElementById('floorplanWrapper');
+            wrapper.innerHTML = `
+                <div class="floorplan-canvas" id="floorplanCanvas">
+                    <img src="${imageSrc}" alt="Floorplan" onload="setupCanvas()">
+                </div>
+            `;
+        }
+
+        function setupCanvas() {
+            const canvas = document.getElementById('floorplanCanvas');
+            canvas.addEventListener('click', handleCanvasClick);
+            redrawPoints();
+        }
+
+        function handleCanvasClick(event) {
+            if (!isEditMode) {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const x = ((event.clientX - rect.left) / rect.width * 100).toFixed(2);
+                const y = ((event.clientY - rect.top) / rect.height * 100).toFixed(2);
+
+                const id = document.getElementById('itemId').value.trim();
+                const type = document.getElementById('itemType').value;
+
+                if (!id) {
+                    alert('Please enter an ID for this point');
+                    return;
+                }
+
+                if (coordinateData.find(item => item.id === id)) {
+                    alert('ID already exists. Please use a unique ID.');
+                    return;
+                }
+
+                coordinateData.push({
+                    id: id,
+                    type: type,
+                    x: parseFloat(x),
+                    y: parseFloat(y)
+                });
+
+                document.getElementById('itemId').value = '';
+                updateTable();
+                redrawPoints();
+            }
+        }
+
+        function redrawPoints() {
+            const canvas = document.getElementById('floorplanCanvas');
+            if (!canvas) return;
+
+            // Remove existing points
+            const existingPoints = canvas.querySelectorAll('.coordinate-point');
+            existingPoints.forEach(point => point.remove());
+
+            // Add all points
+            coordinateData.forEach((item, index) => {
+                const point = document.createElement('div');
+                point.className = `coordinate-point ${item.type}`;
+                point.style.left = `${item.x}%`;
+                point.style.top = `${item.y}%`;
+                point.title = `${item.id} (${item.type})`;
+                point.textContent = item.id.length > 4 ? item.id.substring(0, 3) + '...' : item.id;
+
+                if (isEditMode) {
+                    point.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        selectPoint(index);
+                    });
+                }
+
+                canvas.appendChild(point);
+            });
+        }
+
+        function selectPoint(index) {
+            selectedPointIndex = index;
+            const points = document.querySelectorAll('.coordinate-point');
+            points.forEach((point, i) => {
+                point.classList.toggle('selected', i === index);
+            });
+
+            // Populate form with selected point data
+            const item = coordinateData[index];
+            document.getElementById('itemId').value = item.id;
+            document.getElementById('itemType').value = item.type;
+        }
+
+        function toggleMode() {
+            isEditMode = !isEditMode;
+            const modeIndicator = document.getElementById('modeIndicator');
+            const modeButton = document.getElementById('modeButtonText');
+
+            if (isEditMode) {
+                modeIndicator.textContent = 'Edit Mode: Click points to modify';
+                modeButton.textContent = 'Switch to Add Mode';
+            } else {
+                modeIndicator.textContent = 'Click Mode: Add New Points';
+                modeButton.textContent = 'Switch to Edit Mode';
+                selectedPointIndex = -1;
+                document.getElementById('itemId').value = '';
+            }
+
+            redrawPoints();
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+
+            coordinateData.forEach((item, index) => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${item.id}</td>
+                    <td>${item.type}</td>
+                    <td>${item.x}</td>
+                    <td>${item.y}</td>
+                    <td><button class="delete-btn" onclick="deletePoint(${index})">×</button></td>
+                `;
+            });
+        }
+
+        function deletePoint(index) {
+            coordinateData.splice(index, 1);
+            updateTable();
+            redrawPoints();
+            selectedPointIndex = -1;
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all points?')) {
+                coordinateData = [];
+                updateTable();
+                redrawPoints();
+                selectedPointIndex = -1;
+            }
+        }
+
+        function downloadCSV() {
+            if (coordinateData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const headers = ['ID', 'Type', 'X_Coord', 'Y_Coord'];
+            const csvContent = [
+                headers.join(','),
+                ...coordinateData.map(item =>
+                    `${item.id},${item.type},${item.x},${item.y}`
+                )
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'office_coordinates.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function handleCSVUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    parseCSV(e.target.result);
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',');
+
+            coordinateData = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                if (values.length >= 4 && values[0].trim()) {
+                    coordinateData.push({
+                        id: values[0].trim(),
+                        type: values[1].trim(),
+                        x: parseFloat(values[2]),
+                        y: parseFloat(values[3])
+                    });
+                }
+            }
+
+            updateTable();
+            redrawPoints();
+            alert(`Loaded ${coordinateData.length} coordinate points`);
+        }
+
+        // Update edit mode functionality
+        function updatePoint() {
+            if (selectedPointIndex >= 0) {
+                const id = document.getElementById('itemId').value.trim();
+                const type = document.getElementById('itemType').value;
+
+                if (!id) {
+                    alert('Please enter an ID');
+                    return;
+                }
+
+                // Check for duplicate ID (excluding current item)
+                const existingItem = coordinateData.find((item, index) =>
+                    item.id === id && index !== selectedPointIndex
+                );
+
+                if (existingItem) {
+                    alert('ID already exists. Please use a unique ID.');
+                    return;
+                }
+
+                coordinateData[selectedPointIndex].id = id;
+                coordinateData[selectedPointIndex].type = type;
+
+                updateTable();
+                redrawPoints();
+                selectedPointIndex = -1;
+                document.getElementById('itemId').value = '';
+            }
+        }
+
+        // Add update functionality to the edit mode
+        document.getElementById('itemId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && isEditMode && selectedPointIndex >= 0) {
+                updatePoint();
+            }
+        });
+
+        document.getElementById('itemType').addEventListener('change', function() {
+            if (isEditMode && selectedPointIndex >= 0) {
+                updatePoint();
+            }
+        });
+    </script>
+</body>
+</html>
