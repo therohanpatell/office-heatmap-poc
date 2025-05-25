@@ -609,10 +609,10 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Type</th>
-                                <th>X</th>
-                                <th>Y</th>
-                                <th>W</th>
-                                <th>H</th>
+                                <th>X (px)</th>
+                                <th>Y (px)</th>
+                                <th>W (px)</th>
+                                <th>H (px)</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -625,6 +625,8 @@
     </div>
 
     <script>
+        let imageWidth = 0;
+        let imageHeight = 0;
         let coordinateData = [];
         let floorplanImage = null;
         let isEditMode = false;
@@ -736,6 +738,12 @@
             const canvas = document.getElementById('floorplanCanvas');
             const img = canvas.querySelector('img');
 
+            // Get actual image dimensions
+            imageWidth = img.naturalWidth;
+            imageHeight = img.naturalHeight;
+
+            console.log(`Image dimensions: ${imageWidth} x ${imageHeight} pixels`);
+
             // Set initial size
             resetZoom();
 
@@ -752,20 +760,24 @@
             const itemType = document.getElementById('itemType').value;
 
             if (itemType === 'desk') {
-                // Handle desk click
+                // Handle desk click - convert to pixels
                 const rect = event.currentTarget.getBoundingClientRect();
-                const x = ((event.clientX - rect.left) / rect.width * 100);
-                const y = ((event.clientY - rect.top) / rect.height * 100);
+                const canvas = document.getElementById('floorplanCanvas');
+                const img = canvas.querySelector('img');
+
+                // Calculate pixel coordinates
+                const x = Math.round((event.clientX - rect.left) / rect.width * imageWidth);
+                const y = Math.round((event.clientY - rect.top) / rect.height * imageHeight);
 
                 const id = generateNextId('desk');
 
                 coordinateData.push({
                     id: id,
                     type: 'desk',
-                    x: parseFloat(x.toFixed(2)),
-                    y: parseFloat(y.toFixed(2)),
-                    width: 2,  // Fixed size for point marker
-                    height: 2  // Fixed size for point marker
+                    x: x,
+                    y: y,
+                    width: 20,  // Fixed pixel size for point marker
+                    height: 20  // Fixed pixel size for point marker
                 });
 
                 updateTable();
@@ -774,20 +786,20 @@
                 return;
             }
 
-            // Only for meeting rooms - existing drawing logic
+            // Only for meeting rooms - existing drawing logic with pixel conversion
             if (isEditMode) return;
 
             const rect = event.currentTarget.getBoundingClientRect();
-            startX = ((event.clientX - rect.left) / rect.width * 100);
-            startY = ((event.clientY - rect.top) / rect.height * 100);
+            startX = Math.round((event.clientX - rect.left) / rect.width * imageWidth);
+            startY = Math.round((event.clientY - rect.top) / rect.height * imageHeight);
 
             isDrawing = true;
 
             // Create temporary drawing box
             drawingBox = document.createElement('div');
             drawingBox.className = 'drawing-box';
-            drawingBox.style.left = startX + '%';
-            drawingBox.style.top = startY + '%';
+            drawingBox.style.left = (startX / imageWidth * 100) + '%';
+            drawingBox.style.top = (startY / imageHeight * 100) + '%';
             drawingBox.style.width = '0%';
             drawingBox.style.height = '0%';
 
@@ -798,18 +810,19 @@
             if (!isDrawing || !drawingBox || document.getElementById('itemType').value === 'desk') return;
 
             const rect = event.currentTarget.getBoundingClientRect();
-            const currentX = ((event.clientX - rect.left) / rect.width * 100);
-            const currentY = ((event.clientY - rect.top) / rect.height * 100);
+            const currentX = Math.round((event.clientX - rect.left) / rect.width * imageWidth);
+            const currentY = Math.round((event.clientY - rect.top) / rect.height * imageHeight);
 
             const width = Math.abs(currentX - startX);
             const height = Math.abs(currentY - startY);
             const left = Math.min(startX, currentX);
             const top = Math.min(startY, currentY);
 
-            drawingBox.style.left = left + '%';
-            drawingBox.style.top = top + '%';
-            drawingBox.style.width = width + '%';
-            drawingBox.style.height = height + '%';
+            // Convert back to percentage for display
+            drawingBox.style.left = (left / imageWidth * 100) + '%';
+            drawingBox.style.top = (top / imageHeight * 100) + '%';
+            drawingBox.style.width = (width / imageWidth * 100) + '%';
+            drawingBox.style.height = (height / imageHeight * 100) + '%';
         }
 
         function handleMouseUp(event) {
@@ -817,14 +830,14 @@
             if (!isDrawing || !drawingBox) return;
 
             const rect = event.currentTarget.getBoundingClientRect();
-            const endX = ((event.clientX - rect.left) / rect.width * 100);
-            const endY = ((event.clientY - rect.top) / rect.height * 100);
+            const endX = Math.round((event.clientX - rect.left) / rect.width * imageWidth);
+            const endY = Math.round((event.clientY - rect.top) / rect.height * imageHeight);
 
             const width = Math.abs(endX - startX);
             const height = Math.abs(endY - startY);
 
-            // Only create area if box is large enough
-            if (width > 1 && height > 1) {
+            // Only create area if box is large enough (minimum 10 pixels)
+            if (width > 10 && height > 10) {
                 const left = Math.min(startX, endX);
                 const top = Math.min(startY, endY);
                 const type = document.getElementById('itemType').value;
@@ -833,10 +846,10 @@
                 coordinateData.push({
                     id: id,
                     type: type,
-                    x: parseFloat(left.toFixed(2)),
-                    y: parseFloat(top.toFixed(2)),
-                    width: parseFloat(width.toFixed(2)),
-                    height: parseFloat(height.toFixed(2))
+                    x: left,
+                    y: top,
+                    width: width,
+                    height: height
                 });
 
                 updateTable();
@@ -854,7 +867,7 @@
 
         function redrawAreas() {
             const canvas = document.getElementById('floorplanCanvas');
-            if (!canvas) return;
+            if (!canvas || imageWidth === 0) return;
 
             // Remove existing areas
             const existingAreas = canvas.querySelectorAll('.coordinate-box');
@@ -864,16 +877,18 @@
             coordinateData.forEach((item, index) => {
                 const area = document.createElement('div');
                 area.className = `coordinate-box ${item.type}`;
-                area.style.left = `${item.x}%`;
-                area.style.top = `${item.y}%`;
-                area.style.width = `${item.width}%`;
-                area.style.height = `${item.height}%`;
-                area.title = `${item.id} (${item.type})`;
+
+                // Convert pixel coordinates back to percentages for display
+                area.style.left = `${(item.x / imageWidth * 100)}%`;
+                area.style.top = `${(item.y / imageHeight * 100)}%`;
+                area.style.width = `${(item.width / imageWidth * 100)}%`;
+                area.style.height = `${(item.height / imageHeight * 100)}%`;
+                area.title = `${item.id} (${item.type}) - Pixel: ${item.x},${item.y}`;
 
                 // Add label
                 const label = document.createElement('div');
                 label.textContent = item.id.length > 8 ? item.id.substring(0, 6) + '...' : item.id;
-                label.style.fontSize = Math.max(8, Math.min(14, item.width * 0.8)) + 'px';
+                label.style.fontSize = Math.max(8, Math.min(14, (item.width / imageWidth * 100) * 0.8)) + 'px';
                 area.appendChild(label);
 
                 if (isEditMode) {
@@ -990,7 +1005,7 @@
                 return;
             }
 
-            const headers = ['ID', 'Type', 'X_Coord', 'Y_Coord', 'Width', 'Height'];
+            const headers = ['ID', 'Type', 'X_Pixels', 'Y_Pixels', 'Width_Pixels', 'Height_Pixels'];
             const csvContent = [
                 headers.join(','),
                 ...coordinateData.map(item =>
