@@ -1,7 +1,35 @@
+# Office Utilization Analytics Dashboard - Requirements
+# Core Dependencies
+
+# Web Framework
 streamlit
+
+# Data Processing
 pandas
 numpy
-matplotlib
-scipy
+
+# Image Processing
 Pillow
+scipy
+
+# Visualization
 plotly
+
+# Utility Libraries
+pathlib2
+
+# Optional: For enhanced Excel export functionality
+# openpyxl
+
+# Optional: For database connectivity
+# sqlite3 (built-in with Python)
+# sqlalchemy
+
+# Development Dependencies (uncomment if needed)
+# pytest
+# black
+# flake8
+
+# Production Dependencies (uncomment for deployment)
+# gunicorn
+# uvicorn
