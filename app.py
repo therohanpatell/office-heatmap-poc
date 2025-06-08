@@ -92,54 +92,52 @@ w, h = img_width, img_height
 # ── 7) BUILD INTENSITY GRID ───────────────────────────────────────────────────
 RES_X = min(int(w), 400)
 RES_Y = min(int(h), 300)
-xi = np.linspace(x_min, x_max, RES_X)
-yi = np.linspace(y_min, y_max, RES_Y)
+xi    = np.linspace(x_min, x_max, RES_X)
+yi    = np.linspace(y_min, y_max, RES_Y)
 intensity = np.zeros((RES_Y, RES_X))
 
-# weights
-DESK_WEIGHT    = 1.0       # unchanged
-NEIGHBOR_RATIO = 0.2       # unchanged
-ROOM_WEIGHT    = 2.0       # bump room cores up
-# (we no longer need ROOM_HALO_RATIO)
+# weights & radii
+DESK_WEIGHT       = 1.0
+DESK_HALO_RATIO   = 0.2
+ROOM_WEIGHT       = 1.0
+ROOM_HALO_RATIO   = 1.0    # bigger halo
+ROOM_HALO_RADIUS  = 5     # spread out two cells
 
 for _, row in df.iterrows():
     score = row["Utilization_Score"]
     if score <= 0:
         continue
 
-    cx, cy    = row["X_Pixels"], row["Y_Pixels"]
-    w_px, h_px = row["Width_Pixels"], row["Height_Pixels"]
-
+    # determine center cell
     if row["Type"] == "desk":
-        # desk core
-        ix = int(np.clip((cx-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
-        iy = int(np.clip((cy-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
-        intensity[iy, ix] += score * DESK_WEIGHT
-
-        # desk neighbors
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if dx==0 and dy==0:
-                    continue
-                ny, nx = iy+dy, ix+dx
-                if 0 <= ny < RES_Y and 0 <= nx < RES_X:
-                    intensity[ny, nx] += score * DESK_WEIGHT * NEIGHBOR_RATIO
-
+        cx, cy = row["X_Pixels"], row["Y_Pixels"]
+        halo_ratio, halo_radius = DESK_HALO_RATIO, 1
+        weight = DESK_WEIGHT
     else:
-        # meeting-room core spread
-        x1, x2 = cx, cx + w_px
-        y1, y2 = cy, cy + h_px
-        ix1 = int(np.clip((x1-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
-        ix2 = int(np.clip((x2-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
-        iy1 = int(np.clip((y1-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
-        iy2 = int(np.clip((y2-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
-        ix2, iy2 = max(ix1+1, min(ix2, RES_X)), max(iy1+1, min(iy2, RES_Y))
+        # use geometric center of room
+        cx = row["X_Pixels"] + row["Width_Pixels"]/2
+        cy = row["Y_Pixels"] + row["Height_Pixels"]/2
+        halo_ratio, halo_radius = ROOM_HALO_RATIO, ROOM_HALO_RADIUS
+        weight = ROOM_WEIGHT
 
-        area = (ix2 - ix1) * (iy2 - iy1)
-        if area > 0:
-            # spread a stronger ROOM_WEIGHT across the room's cells
-            per_cell = (score * ROOM_WEIGHT) / area
-            intensity[iy1:iy2, ix1:ix2] += per_cell
+    # map to grid index
+    ix = int(np.clip((cx-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
+    iy = int(np.clip((cy-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
+
+    # bump center
+    intensity[iy, ix] += score * weight
+
+    # bump neighbors within halo_radius
+    for dy in range(-halo_radius, halo_radius+1):
+        for dx in range(-halo_radius, halo_radius+1):
+            if dx == 0 and dy == 0:
+                continue
+            ny, nx = iy+dy, ix+dx
+            if 0 <= ny < RES_Y and 0 <= nx < RES_X:
+                # distance‐based falloff (optional)
+                dist = max(abs(dx), abs(dy))
+                falloff = 1.0 / dist   # or simply 1.0
+                intensity[ny, nx] += score * weight * halo_ratio * falloff
 
 # ── 8) GAUSSIAN BLUR ───────────────────────────────────────────────────────────
 sigma_x = max(3, RES_X/40)
