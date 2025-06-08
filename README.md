@@ -76,7 +76,7 @@ Your application directory must contain these files:
 
 ```
 project_folder/
-├── main_app.py                 # Main application code
+├── app.py                 # Main application code
 ├── booking_data.csv           # Booking history data
 ├── coordinate_mapping.csv     # Space coordinates
 ├── office_floorplan.jpg       # Floor plan image
@@ -555,7 +555,7 @@ gc.collect()
 3. **Prepare data files** in same directory
 4. **Run application**:
    ```bash
-   streamlit run main_app.py
+   streamlit run app.py
    ```
 5. **Open browser** to displayed URL (usually http://localhost:8501)
 
