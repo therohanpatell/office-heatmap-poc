@@ -6,102 +6,127 @@ from scipy.ndimage import gaussian_filter
 import plotly.graph_objects as go
 import base64
 
-# ── 1) CONFIG ────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Office Heatmap", layout="wide")
+# ── 1) STREAMLIT CONFIG ────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Interactive Office Heatmap",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 st.title("📊 Interactive Office Utilization Heatmap")
 
-# ── 2) PATHS ──────────────────────────────────────────────────────────────────
+# ── 2) FILEPATHS ──────────────────────────────────────────────────────────────
 BOOKING_CSV   = "booking_data.csv"
 COORD_CSV     = "coordinate_mapping.csv"
 FLOORPLAN_IMG = "office_floorplan.jpg"
 
-# ── 3) LOAD ───────────────────────────────────────────────────────────────────
+# ── 3) LOAD DATA ───────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    b = pd.read_csv(BOOKING_CSV, parse_dates=["Booking_Timestamp"])
-    c = pd.read_csv(COORD_CSV)
-    return b, c
+    bookings_df = pd.read_csv(BOOKING_CSV, parse_dates=["Booking_Timestamp"])
+    coords_df   = pd.read_csv(COORD_CSV)
+    return bookings_df, coords_df
 
 bookings, coords = load_data()
 
-# ── 4) DATE PICKER ────────────────────────────────────────────────────────────
+# ── 4) DATE RANGE PICKER (MAIN PAGE, SAFE) ────────────────────────────────────
 min_date = bookings["Booking_Timestamp"].dt.date.min()
 max_date = bookings["Booking_Timestamp"].dt.date.max()
+
 st.header("📅 Filter Bookings by Date")
-date_sel = st.date_input("Select date range:",
-                         value=(min_date, max_date),
-                         min_value=min_date,
-                         max_value=max_date)
+date_sel = st.date_input(
+    "Select date range:",
+    value=(min_date, max_date),
+    min_value=min_date,
+    max_value=max_date,
+    key="date_range"
+)
 if not (isinstance(date_sel, tuple) and len(date_sel) == 2):
-    st.info("Select *both* start and end dates.")
+    st.info("👉 Please select *both* a start **and** end date to view the heatmap.")
     st.stop()
 start_date, end_date = date_sel
 if start_date > end_date:
-    st.error("Start must be before end.")
+    st.error("↩️ Start date must be before end date.")
     st.stop()
 
-f = bookings.loc[
+filtered = bookings.loc[
     (bookings["Booking_Timestamp"].dt.date >= start_date) &
     (bookings["Booking_Timestamp"].dt.date <= end_date)
-]
-st.write(f"Total bookings: {len(f):,}")
-if f.empty:
-    st.warning("No data in this range.")
+].copy()
+
+st.write(f"Total bookings in range: **{len(filtered):,}**")
+if filtered.empty:
+    st.warning("⚠️ No booking data in this date range.")
     st.stop()
 
-# ── 5) AGGREGATE ──────────────────────────────────────────────────────────────
-f["ID"] = f["Desk_ID"].fillna(f["Meeting_Room_ID"])
-agg = (f.groupby("ID")["Duration"]
-         .sum()
-         .reset_index(name="Total_Duration"))
-agg["Utilization_Score"] = agg["Total_Duration"] / 480.0
+# ── 5) AGGREGATE UTILIZATION ──────────────────────────────────────────────────
+filtered["ID"] = filtered["Desk_ID"].fillna(filtered["Meeting_Room_ID"])
+agg = (
+    filtered
+    .groupby("ID")["Duration"]
+    .sum()
+    .reset_index(name="Total_Duration")
+)
+agg["Utilization_Score"] = agg["Total_Duration"] / 480.0  # minutes → 8h days
 
-df = coords.merge(agg, on="ID", how="left").fillna(0)
-# we’ll fill missing columns automatically:
-df["Utilization_Score"] = df["Utilization_Score"].astype(float)
+# merge with coords, fill missing
+df = coords.merge(agg, on="ID", how="left").fillna({
+    "Total_Duration":    0.0,
+    "Utilization_Score": 0.0
+})
 
-# ── 6) FLOORPLAN & EXTENTS ───────────────────────────────────────────────────
+# ── 6) LOAD FLOORPLAN & SET EXTENTS ────────────────────────────────────────────
 try:
-    img = Image.open(FLOORPLAN_IMG)
-    w, h = img.size
-    x_min, x_max = 0, w
-    y_min, y_max = 0, h
+    img_pil = Image.open(FLOORPLAN_IMG)
+    img_width, img_height = img_pil.size
+    x_min, x_max = 0, img_width
+    y_min, y_max = 0, img_height
 except FileNotFoundError:
     x_min = min(df["X_Pixels"] - df["Width_Pixels"])
     x_max = max(df["X_Pixels"] + df["Width_Pixels"])
     y_min = min(df["Y_Pixels"] - df["Height_Pixels"])
     y_max = max(df["Y_Pixels"] + df["Height_Pixels"])
-    w, h = x_max - x_min, y_max - y_min
+    img_width, img_height = int(x_max - x_min), int(y_max - y_min)
 
-# ── 7) HEAT GRID ──────────────────────────────────────────────────────────────
-RES_X, RES_Y = min(int(w), 400), min(int(h), 300)
+w, h = img_width, img_height
+
+# ── 7) BUILD INTENSITY GRID ───────────────────────────────────────────────────
+RES_X = min(int(w), 400)
+RES_Y = min(int(h), 300)
 xi = np.linspace(x_min, x_max, RES_X)
 yi = np.linspace(y_min, y_max, RES_Y)
 intensity = np.zeros((RES_Y, RES_X))
 
-DESK_WEIGHT     = 1.0
-NEIGHBOR_RATIO  = 0.2
+# weights
+DESK_WEIGHT    = 1.0       # unchanged
+NEIGHBOR_RATIO = 0.2       # unchanged
+ROOM_WEIGHT    = 2.0       # bump room cores up
+# (we no longer need ROOM_HALO_RATIO)
 
 for _, row in df.iterrows():
     score = row["Utilization_Score"]
     if score <= 0:
         continue
 
-    cx, cy = row["X_Pixels"], row["Y_Pixels"]
+    cx, cy    = row["X_Pixels"], row["Y_Pixels"]
     w_px, h_px = row["Width_Pixels"], row["Height_Pixels"]
 
     if row["Type"] == "desk":
+        # desk core
         ix = int(np.clip((cx-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
         iy = int(np.clip((cy-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
         intensity[iy, ix] += score * DESK_WEIGHT
-        for dy in (-1,0,1):
-            for dx in (-1,0,1):
-                if dx==0 and dy==0: continue
+
+        # desk neighbors
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx==0 and dy==0:
+                    continue
                 ny, nx = iy+dy, ix+dx
                 if 0 <= ny < RES_Y and 0 <= nx < RES_X:
                     intensity[ny, nx] += score * DESK_WEIGHT * NEIGHBOR_RATIO
 
-    else:  # meeting room
+    else:
+        # meeting-room core spread
         x1, x2 = cx, cx + w_px
         y1, y2 = cy, cy + h_px
         ix1 = int(np.clip((x1-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
@@ -109,57 +134,69 @@ for _, row in df.iterrows():
         iy1 = int(np.clip((y1-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
         iy2 = int(np.clip((y2-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
         ix2, iy2 = max(ix1+1, min(ix2, RES_X)), max(iy1+1, min(iy2, RES_Y))
-        area = (ix2-ix1)*(iy2-iy1)
-        if area>0:
-            # spread one DESK_WEIGHT across the room footprint
-            per_cell = (score * DESK_WEIGHT) / area
+
+        area = (ix2 - ix1) * (iy2 - iy1)
+        if area > 0:
+            # spread a stronger ROOM_WEIGHT across the room's cells
+            per_cell = (score * ROOM_WEIGHT) / area
             intensity[iy1:iy2, ix1:ix2] += per_cell
 
-# blur
-sigma = (max(3, RES_Y/40), max(3, RES_X/40))
-blurred = gaussian_filter(intensity, sigma=sigma)
+# ── 8) GAUSSIAN BLUR ───────────────────────────────────────────────────────────
+sigma_x = max(3, RES_X/40)
+sigma_y = max(3, RES_Y/40)
+blurred = gaussian_filter(intensity, sigma=(sigma_y, sigma_x))
 
-# ── 8) DYNAMIC ZMAX ──────────────────────────────────────────────────────────
+# ── 9) DYNAMIC ZMAX & COLORSCALE ─────────────────────────────────────────────
 ZMAX = np.percentile(blurred, 95)
 
-# ── 9) PLOTLY HEATMAP ────────────────────────────────────────────────────────
 # custom 7-color ramp
-PALETTE = ["#001f3f","#0074D9","#7FDBFF","#2ECC40","#FFDC00","#FF851B","#FF4136"]
-cs = [[i/(len(PALETTE)-1), c] for i, c in enumerate(PALETTE)]
+MY_PALETTE = [
+    "#001f3f", "#0074D9", "#7FDBFF",
+    "#2ECC40", "#FFDC00", "#FF851B", "#FF4136",
+]
+colorscale = [[i/(len(MY_PALETTE)-1), c] for i, c in enumerate(MY_PALETTE)]
 
+# ── 10) PLOTLY HEATMAP ─────────────────────────────────────────────────────────
 fig = go.Figure()
-fig.add_trace(go.Heatmap(
-    z=np.flipud(blurred),
-    x=xi, y=yi,
-    colorscale=cs,
-    zmin=0, zmax=ZMAX,
-    showscale=False, opacity=0.6,
-    zsmooth="best"
-))
+fig.add_trace(
+    go.Heatmap(
+        z=np.flipud(blurred),
+        x=xi,
+        y=yi,
+        colorscale=colorscale,
+        zmin=0,
+        zmax=ZMAX,
+        zsmooth="best",
+        showscale=False,
+        opacity=0.6
+    )
+)
 
-# add floorplan underlay
+# floorplan underlay
 try:
     with open(FLOORPLAN_IMG, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
     fig.update_layout(images=[{
-        "xref":"x","yref":"y","x":x_min,"y":y_max,
+        "xref":"x","yref":"y",
+        "x":x_min,"y":y_max,
         "sizex":x_max-x_min,"sizey":y_max-y_min,
-        "sizing":"stretch","opacity":1,"layer":"below",
+        "sizing":"stretch","opacity":1.0,"layer":"below",
         "source":f"data:image/png;base64,{b64}"
     }])
 except FileNotFoundError:
     pass
 
 fig.update_layout(
-    xaxis=dict(visible=False, showgrid=False, zeroline=False, range=[x_min,x_max]),
-    yaxis=dict(visible=False, showgrid=False, zeroline=False, range=[y_min,y_max],
-               scaleanchor="x", scaleratio=1),
-    margin=dict(l=0,r=0,t=0,b=0), dragmode="zoom"
+    xaxis=dict(visible=False, showgrid=False, zeroline=False, range=[x_min, x_max]),
+    yaxis=dict(visible=False, showgrid=False, zeroline=False,
+               scaleanchor="x", scaleratio=1, range=[y_min, y_max]),
+    margin=dict(l=0, r=0, t=0, b=0),
+    dragmode="zoom"
 )
 
 st.plotly_chart(fig, use_container_width=True, height=600)
 
-# ── 10) LEGEND & STATS ────────────────────────────────────────────────────────
+# ── 11) LEGEND & SUMMARY ───────────────────────────────────────────────────────
 st.markdown("---")
 st.header("📖 Legend & Explanation")
 
@@ -197,26 +234,28 @@ st.markdown("""
 
 """)
 
-# ── 11) SUMMARY STATISTICS ─────────────────────────────────────────────────────
+# ── 12) SUMMARY STATISTICS ─────────────────────────────────────────────────────
 st.header("📊 Utilization Summary Statistics")
 summary_stats = df.groupby("Type").agg({
     "Utilization_Score": ["count", "mean", "max", "sum"]
 }).round(3)
 summary_stats.columns = ["Count", "Mean", "Max", "Total"]
-summary_stats = summary_stats.reset_index().rename(columns={"Type": "Item Type"})
-st.dataframe(summary_stats, use_container_width=True)
+st.dataframe(summary_stats.reset_index().rename(columns={"Type":"Item Type"}), use_container_width=True)
 
 st.subheader("🏆 Top 5 Most Utilized Items")
 top5 = df.nlargest(5, "Utilization_Score")[["ID","Type","Utilization_Score","Total_Duration"]]
 top5 = top5.rename(columns={
-    "ID": "Item ID", "Utilization_Score": "Util Score", "Total_Duration": "Total Minutes"
+    "ID":"Item ID",
+    "Utilization_Score":"Util Score",
+    "Total_Duration":"Total Minutes"
 })
 st.table(top5)
 
 st.subheader("⛔ Unused Items")
-unused = df[df["Utilization_Score"]==0]["ID"].tolist()
+unused = df[df["Utilization_Score"] == 0]["ID"].tolist()
 if unused:
-    st.write(f"Total unused: {len(unused)}")
-    st.write(unused[:20] + (["…"] if len(unused)>20 else []))
+    st.write(f"Total unused items: **{len(unused):,}**")
+    display_list = unused[:20] + (["…"] if len(unused)>20 else [])
+    st.write(display_list)
 else:
-    st.write("None — all used!")
+    st.write("None – all desks & rooms have some utilization in this range!")
