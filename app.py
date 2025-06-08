@@ -5,202 +5,161 @@ from PIL import Image
 from scipy.ndimage import gaussian_filter
 import plotly.graph_objects as go
 import base64
-import io
 
-# ── 1) STREAMLIT CONFIG ────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Interactive Office Heatmap",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# ── 1) CONFIG ────────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Office Heatmap", layout="wide")
 st.title("📊 Interactive Office Utilization Heatmap")
 
-# ── 2) FILEPATHS ──────────────────────────────────────────────────────────────
-BOOKING_CSV    = "booking_data.csv"
-COORD_CSV      = "coordinate_mapping.csv"
-FLOORPLAN_IMG  = "office_floorplan.jpg"
+# ── 2) PATHS ──────────────────────────────────────────────────────────────────
+BOOKING_CSV   = "booking_data.csv"
+COORD_CSV     = "coordinate_mapping.csv"
+FLOORPLAN_IMG = "office_floorplan.jpg"
 
-# ── 3) LOAD DATA (cached) ─────────────────────────────────────────────────────
+# ── 3) LOAD ───────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    bookings_df = pd.read_csv(BOOKING_CSV, parse_dates=["Booking_Timestamp"])
-    coords_df   = pd.read_csv(COORD_CSV)
-    return bookings_df, coords_df
+    b = pd.read_csv(BOOKING_CSV, parse_dates=["Booking_Timestamp"])
+    c = pd.read_csv(COORD_CSV)
+    return b, c
 
 bookings, coords = load_data()
-coords = coords.copy()
 
-# ── 4) DATE RANGE PICKER (MAIN PAGE, SAFELY HANDLED) ─────────────────────────
-# First compute your min/max dates from the booking timestamps:
+# ── 4) DATE PICKER ────────────────────────────────────────────────────────────
 min_date = bookings["Booking_Timestamp"].dt.date.min()
 max_date = bookings["Booking_Timestamp"].dt.date.max()
-
 st.header("📅 Filter Bookings by Date")
-
-# Call date_input a single time
-date_sel = st.date_input(
-    "Select date range:",
-    value=(min_date, max_date),   # this default is a 2-tuple
-    min_value=min_date,
-    max_value=max_date,
-    key="date_range"
-)
-
-# Only unpack once we actually have two dates
-if isinstance(date_sel, tuple) and len(date_sel) == 2:
-    start_date, end_date = date_sel
-else:
-    st.info("👉 Please select *both* a start **and** end date to view the heatmap.")
+date_sel = st.date_input("Select date range:",
+                         value=(min_date, max_date),
+                         min_value=min_date,
+                         max_value=max_date)
+if not (isinstance(date_sel, tuple) and len(date_sel) == 2):
+    st.info("Select *both* start and end dates.")
     st.stop()
-
-# Now it’s safe to validate and filter
+start_date, end_date = date_sel
 if start_date > end_date:
-    st.error("↩️ Start date must be before end date.")
+    st.error("Start must be before end.")
     st.stop()
 
-filtered = bookings.loc[
+f = bookings.loc[
     (bookings["Booking_Timestamp"].dt.date >= start_date) &
     (bookings["Booking_Timestamp"].dt.date <= end_date)
-].copy()
-
-st.write(f"Total bookings in range: **{len(filtered):,}**")
-if filtered.empty:
-    st.warning("⚠️ No booking data in this date range.")
+]
+st.write(f"Total bookings: {len(f):,}")
+if f.empty:
+    st.warning("No data in this range.")
     st.stop()
 
-# ── 5) AGGREGATE UTILIZATION SCORES ────────────────────────────────────────────
-filtered["ID"] = filtered["Desk_ID"].fillna(filtered["Meeting_Room_ID"])
-agg = (
-    filtered
-    .groupby("ID")["Duration"]
-    .sum()
-    .reset_index(name="Total_Duration")
-)
-agg["Utilization_Score"] = agg["Total_Duration"] / 480.0  # normalize to 8-hour day
+# ── 5) AGGREGATE ──────────────────────────────────────────────────────────────
+f["ID"] = f["Desk_ID"].fillna(f["Meeting_Room_ID"])
+agg = (f.groupby("ID")["Duration"]
+         .sum()
+         .reset_index(name="Total_Duration"))
+agg["Utilization_Score"] = agg["Total_Duration"] / 480.0
 
-df = coords.merge(agg, on="ID", how="left").fillna({
-    "Total_Duration":    0.0,
-    "Utilization_Score": 0.0
-})
+df = coords.merge(agg, on="ID", how="left").fillna(0)
+# we’ll fill missing columns automatically:
+df["Utilization_Score"] = df["Utilization_Score"].astype(float)
 
-# ── 6) LOAD FLOORPLAN & SET EXTENTS ────────────────────────────────────────────
+# ── 6) FLOORPLAN & EXTENTS ───────────────────────────────────────────────────
 try:
-    img_pil = Image.open(FLOORPLAN_IMG)
-    img_width, img_height = img_pil.size
-    x_min, x_max = 0, img_width
-    y_min, y_max = 0, img_height
+    img = Image.open(FLOORPLAN_IMG)
+    w, h = img.size
+    x_min, x_max = 0, w
+    y_min, y_max = 0, h
 except FileNotFoundError:
-    x_min = min(df["X_Pixels"].min(), (df["X_Pixels"] - df["Width_Pixels"]).min())
-    x_max = max(df["X_Pixels"].max(), (df["X_Pixels"] + df["Width_Pixels"]).max())
-    y_min = min(df["Y_Pixels"].min(), (df["Y_Pixels"] - df["Height_Pixels"]).min())
-    y_max = max(df["Y_Pixels"].max(), (df["Y_Pixels"] + df["Height_Pixels"]).max())
-    img_width, img_height = int(x_max - x_min), int(y_max - y_min)
+    x_min = min(df["X_Pixels"] - df["Width_Pixels"])
+    x_max = max(df["X_Pixels"] + df["Width_Pixels"])
+    y_min = min(df["Y_Pixels"] - df["Height_Pixels"])
+    y_max = max(df["Y_Pixels"] + df["Height_Pixels"])
+    w, h = x_max - x_min, y_max - y_min
 
-# ── 7) BUILD A DOWN-SAMPLED HEAT GRID ─────────────────────────────────────────
-HEAT_RES_X = min(int(img_width), 400)
-HEAT_RES_Y = min(int(img_height), 300)
+# ── 7) HEAT GRID ──────────────────────────────────────────────────────────────
+RES_X, RES_Y = min(int(w), 400), min(int(h), 300)
+xi = np.linspace(x_min, x_max, RES_X)
+yi = np.linspace(y_min, y_max, RES_Y)
+intensity = np.zeros((RES_Y, RES_X))
 
-xi = np.linspace(x_min, x_max, HEAT_RES_X)
-yi = np.linspace(y_min, y_max, HEAT_RES_Y)
-intensity = np.zeros((HEAT_RES_Y, HEAT_RES_X))
+DESK_WEIGHT     = 1.0
+NEIGHBOR_RATIO  = 0.2
 
 for _, row in df.iterrows():
-    cx, cy = row["X_Pixels"], row["Y_Pixels"]
-    w, h   = row["Width_Pixels"], row["Height_Pixels"]
-    score  = row["Utilization_Score"]
+    score = row["Utilization_Score"]
     if score <= 0:
         continue
 
+    cx, cy = row["X_Pixels"], row["Y_Pixels"]
+    w_px, h_px = row["Width_Pixels"], row["Height_Pixels"]
+
     if row["Type"] == "desk":
-        ix = int(np.clip((cx - x_min)/(x_max - x_min)*(HEAT_RES_X-1), 0, HEAT_RES_X-1))
-        iy = int(np.clip((cy - y_min)/(y_max - y_min)*(HEAT_RES_Y-1), 0, HEAT_RES_Y-1))
-        intensity[iy, ix] += score * 3.0
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
+        ix = int(np.clip((cx-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
+        iy = int(np.clip((cy-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
+        intensity[iy, ix] += score * DESK_WEIGHT
+        for dy in (-1,0,1):
+            for dx in (-1,0,1):
                 if dx==0 and dy==0: continue
                 ny, nx = iy+dy, ix+dx
-                if 0 <= ny < HEAT_RES_Y and 0 <= nx < HEAT_RES_X:
-                    intensity[ny, nx] += score * 0.5
-    else:
-        x1, x2 = cx, cx + w
-        y1, y2 = cy, cy + h
-        ix1 = int(np.clip((x1 - x_min)/(x_max - x_min)*(HEAT_RES_X-1), 0, HEAT_RES_X-1))
-        ix2 = int(np.clip((x2 - x_min)/(x_max - x_min)*(HEAT_RES_X-1), 0, HEAT_RES_X-1))
-        iy1 = int(np.clip((y1 - y_min)/(y_max - y_min)*(HEAT_RES_Y-1), 0, HEAT_RES_Y-1))
-        iy2 = int(np.clip((y2 - y_min)/(y_max - y_min)*(HEAT_RES_Y-1), 0, HEAT_RES_Y-1))
-        ix2, iy2 = max(ix1+1, min(ix2, HEAT_RES_X)), max(iy1+1, min(iy2, HEAT_RES_Y))
-        if (ix2-ix1)*(iy2-iy1) > 0:
-            intensity[iy1:iy2, ix1:ix2] += score * 0.3
+                if 0 <= ny < RES_Y and 0 <= nx < RES_X:
+                    intensity[ny, nx] += score * DESK_WEIGHT * NEIGHBOR_RATIO
 
-sigma_x = max(3, HEAT_RES_X/40)
-sigma_y = max(3, HEAT_RES_Y/40)
-blurred = gaussian_filter(intensity, sigma=(sigma_y, sigma_x))
+    else:  # meeting room
+        x1, x2 = cx, cx + w_px
+        y1, y2 = cy, cy + h_px
+        ix1 = int(np.clip((x1-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
+        ix2 = int(np.clip((x2-x_min)/(x_max-x_min)*(RES_X-1), 0, RES_X-1))
+        iy1 = int(np.clip((y1-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
+        iy2 = int(np.clip((y2-y_min)/(y_max-y_min)*(RES_Y-1), 0, RES_Y-1))
+        ix2, iy2 = max(ix1+1, min(ix2, RES_X)), max(iy1+1, min(iy2, RES_Y))
+        area = (ix2-ix1)*(iy2-iy1)
+        if area>0:
+            # spread one DESK_WEIGHT across the room footprint
+            per_cell = (score * DESK_WEIGHT) / area
+            intensity[iy1:iy2, ix1:ix2] += per_cell
 
-# ── 8) BACKGROUND IMAGE → BASE64 ──────────────────────────────────────────────
-def _img_to_base64(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    return f"data:image/png;base64,{base64.b64encode(data).decode()}"
+# blur
+sigma = (max(3, RES_Y/40), max(3, RES_X/40))
+blurred = gaussian_filter(intensity, sigma=sigma)
 
-try:
-    img_b64 = _img_to_base64(FLOORPLAN_IMG)
-except FileNotFoundError:
-    img_b64 = None
+# ── 8) DYNAMIC ZMAX ──────────────────────────────────────────────────────────
+ZMAX = np.percentile(blurred, 95)
 
-# ── 9) PLOTLY FIGURE WITH CUSTOM COLORSCALE ──────────────────────────────────
-# Your 7-color palette: dark-blue → red
-MY_PALETTE = [
-    "#001f3f",  # deep navy (unused areas)
-    "#0074D9",
-    "#7FDBFF",
-    "#2ECC40",
-    "#FFDC00",
-    "#FF851B",
-    "#FF4136",  # hottest
-]
-colorscale = [[i/(len(MY_PALETTE)-1), c] for i, c in enumerate(MY_PALETTE)]
+# ── 9) PLOTLY HEATMAP ────────────────────────────────────────────────────────
+# custom 7-color ramp
+PALETTE = ["#001f3f","#0074D9","#7FDBFF","#2ECC40","#FFDC00","#FF851B","#FF4136"]
+cs = [[i/(len(PALETTE)-1), c] for i, c in enumerate(PALETTE)]
 
-blurred_flipped = np.flipud(blurred)
 fig = go.Figure()
+fig.add_trace(go.Heatmap(
+    z=np.flipud(blurred),
+    x=xi, y=yi,
+    colorscale=cs,
+    zmin=0, zmax=ZMAX,
+    showscale=False, opacity=0.6,
+    zsmooth="best"
+))
 
-fig.add_trace(
-    go.Heatmap(
-        z=blurred_flipped,
-        x=xi,
-        y=yi,
-        colorscale=colorscale,
-        zsmooth="best",
-        showscale=False,
-        opacity=0.6
-    )
-)
-
-if img_b64:
-    fig.update_layout(
-        images=[{
-            "xref": "x",
-            "yref": "y",
-            "x": x_min,
-            "y": y_max,
-            "sizex": x_max - x_min,
-            "sizey": y_max - y_min,
-            "sizing": "stretch",
-            "opacity": 1.0,
-            "layer": "below",
-            "source": img_b64
-        }]
-    )
+# add floorplan underlay
+try:
+    with open(FLOORPLAN_IMG, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    fig.update_layout(images=[{
+        "xref":"x","yref":"y","x":x_min,"y":y_max,
+        "sizex":x_max-x_min,"sizey":y_max-y_min,
+        "sizing":"stretch","opacity":1,"layer":"below",
+        "source":f"data:image/png;base64,{b64}"
+    }])
+except FileNotFoundError:
+    pass
 
 fig.update_layout(
-    xaxis=dict(range=[x_min, x_max], showgrid=False, zeroline=False, visible=False),
-    yaxis=dict(range=[y_min, y_max], showgrid=False, zeroline=False, scaleanchor="x", scaleratio=1, visible=False),
-    margin=dict(l=0, r=0, t=0, b=0),
-    dragmode="zoom"
+    xaxis=dict(visible=False, showgrid=False, zeroline=False, range=[x_min,x_max]),
+    yaxis=dict(visible=False, showgrid=False, zeroline=False, range=[y_min,y_max],
+               scaleanchor="x", scaleratio=1),
+    margin=dict(l=0,r=0,t=0,b=0), dragmode="zoom"
 )
 
 st.plotly_chart(fig, use_container_width=True, height=600)
 
-# ── 10) EXPLANATORY TEXT & LEGEND ──────────────────────────────────────────────
+# ── 10) LEGEND & STATS ────────────────────────────────────────────────────────
 st.markdown("---")
 st.header("📖 Legend & Explanation")
 
@@ -255,10 +214,9 @@ top5 = top5.rename(columns={
 st.table(top5)
 
 st.subheader("⛔ Unused Items")
-unused_ids = df.loc[df["Utilization_Score"] == 0, "ID"].tolist()
-if unused_ids:
-    st.write(f"Total unused items: **{len(unused_ids):,}**")
-    display_list = unused_ids[:20] + (["…"] if len(unused_ids)>20 else [])
-    st.write(display_list)
+unused = df[df["Utilization_Score"]==0]["ID"].tolist()
+if unused:
+    st.write(f"Total unused: {len(unused)}")
+    st.write(unused[:20] + (["…"] if len(unused)>20 else []))
 else:
-    st.write("None – all desks & rooms have some utilization in this range!")
+    st.write("None — all used!")
