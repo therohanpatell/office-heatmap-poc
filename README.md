@@ -85,12 +85,12 @@ project_folder/
 
 ### Required Python Packages
 ```txt
-streamlit>=1.28.0
-pandas>=1.5.0
-numpy>=1.24.0
-plotly>=5.15.0
-pillow>=10.0.0
-scipy>=1.10.0
+streamlit
+pandas
+numpy
+plotly
+pillow
+scipy
 ```
 
 ### Data File Formats
