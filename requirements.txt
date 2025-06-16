@@ -17,6 +17,7 @@ plotly
 
 # Utility Libraries
 pathlib2
+faker
 
 # Optional: For enhanced Excel export functionality
 # openpyxl
