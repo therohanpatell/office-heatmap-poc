@@ -37,10 +37,7 @@ class Config:
 
     # Visualization weights
     DESK_WEIGHT = 1.0
-    DESK_HALO_RATIO = 0.2
     ROOM_WEIGHT = 1.0
-    ROOM_HALO_RATIO = 1.0
-    ROOM_HALO_RADIUS = 5
 
     # Thresholds
     LOW_UTILIZATION_THRESHOLD = 0.2  # 20% or less
@@ -244,31 +241,18 @@ def generate_heatmap_data(df, img_dimensions):
         # Determine parameters based on type
         if row["Type"] == "desk":
             cx, cy = row["X_Pixels"], row["Y_Pixels"]
-            halo_ratio, halo_radius = Config.DESK_HALO_RATIO, 1
             weight = Config.DESK_WEIGHT
         else:
             cx = row["X_Pixels"] + row.get("Width_Pixels", 0) / 2
             cy = row["Y_Pixels"] + row.get("Height_Pixels", 0) / 2
-            halo_ratio, halo_radius = Config.ROOM_HALO_RATIO, Config.ROOM_HALO_RADIUS
             weight = Config.ROOM_WEIGHT
 
         # Map to grid coordinates
         ix = int(np.clip((cx - x_min) / (x_max - x_min) * (RES_X - 1), 0, RES_X - 1))
         iy = int(np.clip((cy - y_min) / (y_max - y_min) * (RES_Y - 1), 0, RES_Y - 1))
 
-        # Add intensity with halo effect
+        # Add intensity without halo effect
         intensity[iy, ix] += score * weight
-
-        # Add halo effect
-        for dy in range(-halo_radius, halo_radius + 1):
-            for dx in range(-halo_radius, halo_radius + 1):
-                if dx == 0 and dy == 0:
-                    continue
-                ny, nx = iy + dy, ix + dx
-                if 0 <= ny < RES_Y and 0 <= nx < RES_X:
-                    dist = max(abs(dx), abs(dy))
-                    falloff = 1.0 / dist
-                    intensity[ny, nx] += score * weight * halo_ratio * falloff
 
     # Apply Gaussian blur
     sigma_x = max(3, RES_X / 40)
