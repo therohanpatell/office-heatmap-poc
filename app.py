@@ -43,11 +43,15 @@ class Config:
     LOW_UTILIZATION_THRESHOLD = 0.2  # 20% or less
     HIGH_UTILIZATION_THRESHOLD = 0.8  # 80% or more
 
-    # Colors
-    COLOR_PALETTE = [
-        "#001f3f", "#0074D9", "#7FDBFF",
-        "#2ECC40", "#FFDC00", "#FF851B", "#FF4136"
-    ]
+    # Heatmap color options (single-color gradients)
+    HEATMAP_COLORS = {
+        "Red": "#FF4136",
+        "Yellow": "#FFDC00",
+        "Green": "#2ECC40",
+        "Blue": "#0074D9",
+        "Orange": "#FF851B",
+    }
+    DEFAULT_HEATMAP_COLOR = "Red"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -180,6 +184,16 @@ def load_and_validate_data():
         st.error(f"❌ Error loading data: {str(e)}")
         st.info("Please check your data files and try again.")
         st.stop()
+
+
+def create_colorscale(hex_color: str):
+    """Return a simple two-stop colorscale from transparent to the given color."""
+    r, g, b = tuple(int(hex_color.lstrip('#')[i : i + 2], 16) for i in (0, 2, 4))
+    return [
+        [0.0, f"rgba({r}, {g}, {b}, 0)"],
+        [0.5, f"rgba({r}, {g}, {b}, 0.6)"],
+        [1.0, f"rgba({r}, {g}, {b}, 1)"],
+    ]
 
 
 def create_utilization_metrics(df, daily_bookings=None, analysis_period=None):
@@ -320,6 +334,12 @@ def main():
         st.markdown("### 🎨 Display Options")
         show_heatmap_overlay = st.checkbox("Show Heatmap Overlay", value=True)
         heatmap_opacity = st.slider("Heatmap Opacity", 0.1, 1.0, 0.6, 0.1)
+        heatmap_color_label = st.selectbox(
+            "Heatmap Color",
+            list(Config.HEATMAP_COLORS.keys()),
+            index=list(Config.HEATMAP_COLORS.keys()).index(Config.DEFAULT_HEATMAP_COLOR),
+        )
+        heatmap_color = Config.HEATMAP_COLORS[heatmap_color_label]
 
     # Validate date range
     if isinstance(date_range, tuple) and len(date_range) == 2:
@@ -433,7 +453,7 @@ def main():
 
                 # Add heatmap
                 zmax = np.percentile(heatmap_data, 95) if heatmap_data.max() > 0 else 1
-                colorscale = [[i / (len(Config.COLOR_PALETTE) - 1), c] for i, c in enumerate(Config.COLOR_PALETTE)]
+                colorscale = create_colorscale(heatmap_color)
 
                 fig.add_trace(
                     go.Heatmap(
@@ -491,7 +511,7 @@ def main():
                     - **Zoom**: Click and drag to select an area, or use the zoom tools in the toolbar
                     - **Pan**: After zooming, click the pan tool (hand icon) to move around  
                     - **Reset**: Click the home icon to return to full view
-                    - **Heatmap Colors**: Red/orange areas indicate high utilization, blue areas show low utilization
+                    - **Heatmap Color**: Select your preferred color from the sidebar
                     - **Opacity**: Adjust the heatmap opacity using the sidebar slider
                     """)
 
