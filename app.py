@@ -185,22 +185,36 @@ def load_and_validate_data():
         st.stop()
 
 
-def create_utilization_metrics(df):
-    """Create comprehensive utilization metrics"""
+def create_utilization_metrics(df, daily_bookings=None, analysis_period=None):
+    """Create comprehensive utilization metrics."""
     total_items = len(df)
     utilized_items = len(df[df["Utilization_Score"] > 0])
-    avg_utilization = df["Utilization_Score"].mean()
     max_utilization = df["Utilization_Score"].max()
 
     low_util_items = len(
         df[(df["Utilization_Score"] > 0) & (df["Utilization_Score"] <= Config.LOW_UTILIZATION_THRESHOLD)])
     high_util_items = len(df[df["Utilization_Score"] >= Config.HIGH_UTILIZATION_THRESHOLD])
 
+    # Calculate average daily utilization if booking data is provided
+    avg_daily_utilization = np.nan
+    if daily_bookings is not None and analysis_period is not None:
+        start_date, end_date = analysis_period
+        # Ensure date column exists
+        daily_bookings["Booking_Date"] = daily_bookings["Booking_Timestamp"].dt.date
+        daily_counts = (
+            daily_bookings.groupby("Booking_Date")["ID"].nunique()
+        )
+        # Ensure all days in the period are represented
+        all_days = pd.date_range(start_date, end_date, freq="D").date
+        daily_counts = daily_counts.reindex(all_days, fill_value=0)
+        daily_utilization = daily_counts / total_items if total_items > 0 else 0
+        avg_daily_utilization = daily_utilization.mean()
+
     return {
         "total_items": total_items,
         "utilized_items": utilized_items,
         "utilization_rate": (utilized_items / total_items) * 100 if total_items > 0 else 0,
-        "avg_utilization": avg_utilization,
+        "avg_utilization": avg_daily_utilization,
         "max_utilization": max_utilization,
         "low_util_items": low_util_items,
         "high_util_items": high_util_items,
@@ -363,8 +377,12 @@ def main():
             "Booking_Count": 0
         })
 
-    # Calculate metrics
-    metrics = create_utilization_metrics(analysis_df)
+    # Calculate metrics, including average daily utilization
+    metrics = create_utilization_metrics(
+        analysis_df,
+        daily_bookings=filtered_bookings,
+        analysis_period=(start_date, end_date)
+    )
 
     # Display key metrics
     st.markdown('<h2 class="section-header">📊 Key Performance Indicators</h2>', unsafe_allow_html=True)
@@ -385,9 +403,9 @@ def main():
         )
     with col3:
         st.metric(
-            "Average Utilization",
+            "Average Daily Utilization",
             f"{metrics['avg_utilization']:.1%}",
-            help="Average utilization score across all items"
+            help="Average percentage of seats booked each day"
         )
     with col4:
         st.metric(
@@ -686,7 +704,7 @@ def main():
             **Key Findings:**
             - **Total Workspace Items:** {metrics['total_items']:,}
             - **Overall Utilization Rate:** {metrics['utilization_rate']:.1f}%
-            - **Average Utilization Score:** {metrics['avg_utilization']:.1%}
+            - **Average Daily Utilization:** {metrics['avg_utilization']:.1%}
             - **Items Needing Attention:** {metrics['low_util_items'] + metrics['unused_items']} ({(metrics['low_util_items'] + metrics['unused_items']) / metrics['total_items'] * 100:.1f}% of total)
 
             **Breakdown by Category:**
