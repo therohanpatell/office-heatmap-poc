@@ -37,16 +37,13 @@ class Config:
 
     # Visualization weights
     DESK_WEIGHT = 1.0
-    DESK_HALO_RATIO = 0.2
     ROOM_WEIGHT = 1.0
-    ROOM_HALO_RATIO = 1.0
-    ROOM_HALO_RADIUS = 5
 
     # Thresholds
     LOW_UTILIZATION_THRESHOLD = 0.2  # 20% or less
     HIGH_UTILIZATION_THRESHOLD = 0.8  # 80% or more
 
-    # Colors
+    # Colorscale for heatmap from low (blue) to high (red)
     COLOR_PALETTE = [
         "#001f3f", "#0074D9", "#7FDBFF",
         "#2ECC40", "#FFDC00", "#FF851B", "#FF4136"
@@ -185,22 +182,36 @@ def load_and_validate_data():
         st.stop()
 
 
-def create_utilization_metrics(df):
-    """Create comprehensive utilization metrics"""
+def create_utilization_metrics(df, daily_bookings=None, analysis_period=None):
+    """Create comprehensive utilization metrics."""
     total_items = len(df)
     utilized_items = len(df[df["Utilization_Score"] > 0])
-    avg_utilization = df["Utilization_Score"].mean()
     max_utilization = df["Utilization_Score"].max()
 
     low_util_items = len(
         df[(df["Utilization_Score"] > 0) & (df["Utilization_Score"] <= Config.LOW_UTILIZATION_THRESHOLD)])
     high_util_items = len(df[df["Utilization_Score"] >= Config.HIGH_UTILIZATION_THRESHOLD])
 
+    # Calculate average daily utilization if booking data is provided
+    avg_daily_utilization = np.nan
+    if daily_bookings is not None and analysis_period is not None:
+        start_date, end_date = analysis_period
+        # Ensure date column exists
+        daily_bookings["Booking_Date"] = daily_bookings["Booking_Timestamp"].dt.date
+        daily_counts = (
+            daily_bookings.groupby("Booking_Date")["ID"].nunique()
+        )
+        # Ensure all days in the period are represented
+        all_days = pd.date_range(start_date, end_date, freq="D").date
+        daily_counts = daily_counts.reindex(all_days, fill_value=0)
+        daily_utilization = daily_counts / total_items if total_items > 0 else 0
+        avg_daily_utilization = daily_utilization.mean()
+
     return {
         "total_items": total_items,
         "utilized_items": utilized_items,
         "utilization_rate": (utilized_items / total_items) * 100 if total_items > 0 else 0,
-        "avg_utilization": avg_utilization,
+        "avg_utilization": avg_daily_utilization,
         "max_utilization": max_utilization,
         "low_util_items": low_util_items,
         "high_util_items": high_util_items,
@@ -230,31 +241,18 @@ def generate_heatmap_data(df, img_dimensions):
         # Determine parameters based on type
         if row["Type"] == "desk":
             cx, cy = row["X_Pixels"], row["Y_Pixels"]
-            halo_ratio, halo_radius = Config.DESK_HALO_RATIO, 1
             weight = Config.DESK_WEIGHT
         else:
             cx = row["X_Pixels"] + row.get("Width_Pixels", 0) / 2
             cy = row["Y_Pixels"] + row.get("Height_Pixels", 0) / 2
-            halo_ratio, halo_radius = Config.ROOM_HALO_RATIO, Config.ROOM_HALO_RADIUS
             weight = Config.ROOM_WEIGHT
 
         # Map to grid coordinates
         ix = int(np.clip((cx - x_min) / (x_max - x_min) * (RES_X - 1), 0, RES_X - 1))
         iy = int(np.clip((cy - y_min) / (y_max - y_min) * (RES_Y - 1), 0, RES_Y - 1))
 
-        # Add intensity with halo effect
+        # Add intensity without halo effect
         intensity[iy, ix] += score * weight
-
-        # Add halo effect
-        for dy in range(-halo_radius, halo_radius + 1):
-            for dx in range(-halo_radius, halo_radius + 1):
-                if dx == 0 and dy == 0:
-                    continue
-                ny, nx = iy + dy, ix + dx
-                if 0 <= ny < RES_Y and 0 <= nx < RES_X:
-                    dist = max(abs(dx), abs(dy))
-                    falloff = 1.0 / dist
-                    intensity[ny, nx] += score * weight * halo_ratio * falloff
 
     # Apply Gaussian blur
     sigma_x = max(3, RES_X / 40)
@@ -363,8 +361,12 @@ def main():
             "Booking_Count": 0
         })
 
-    # Calculate metrics
-    metrics = create_utilization_metrics(analysis_df)
+    # Calculate metrics, including average daily utilization
+    metrics = create_utilization_metrics(
+        analysis_df,
+        daily_bookings=filtered_bookings,
+        analysis_period=(start_date, end_date)
+    )
 
     # Display key metrics
     st.markdown('<h2 class="section-header">📊 Key Performance Indicators</h2>', unsafe_allow_html=True)
@@ -385,9 +387,9 @@ def main():
         )
     with col3:
         st.metric(
-            "Average Utilization",
+            "Average Daily Utilization",
             f"{metrics['avg_utilization']:.1%}",
-            help="Average utilization score across all items"
+            help="Average percentage of seats booked each day"
         )
     with col4:
         st.metric(
@@ -431,7 +433,8 @@ def main():
 
                 # Add heatmap
                 zmax = np.percentile(heatmap_data, 95) if heatmap_data.max() > 0 else 1
-                colorscale = [[i / (len(Config.COLOR_PALETTE) - 1), c] for i, c in enumerate(Config.COLOR_PALETTE)]
+                colorscale = [[i / (len(Config.COLOR_PALETTE) - 1), c]
+                             for i, c in enumerate(Config.COLOR_PALETTE)]
 
                 fig.add_trace(
                     go.Heatmap(
@@ -686,7 +689,7 @@ def main():
             **Key Findings:**
             - **Total Workspace Items:** {metrics['total_items']:,}
             - **Overall Utilization Rate:** {metrics['utilization_rate']:.1f}%
-            - **Average Utilization Score:** {metrics['avg_utilization']:.1%}
+            - **Average Daily Utilization:** {metrics['avg_utilization']:.1%}
             - **Items Needing Attention:** {metrics['low_util_items'] + metrics['unused_items']} ({(metrics['low_util_items'] + metrics['unused_items']) / metrics['total_items'] * 100:.1f}% of total)
 
             **Breakdown by Category:**
