@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Coordinate Mapping Tool</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ Office Coordinate Mapping Tool</h1>
+            <p>Auto-generate unique IDs while mapping desks and meeting rooms with precise coordinates</p>
+        </div>
+
+        <div class="main-content">
+            <div class="map-container">
+                <div class="map-controls">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="MappingTool.zoomOut()">−</button>
+                        <div class="zoom-level" id="zoomLevel">100%</div>
+                        <button class="zoom-btn" onclick="MappingTool.zoomIn()">+</button>
+                        <button class="zoom-btn" onclick="MappingTool.resetZoom()" style="width: auto; padding: 0 12px; font-size: 12px;">Reset</button>
+                    </div>
+                </div>
+                <div class="mode-indicator" id="modeIndicator">Drawing Mode: Click and drag to draw boxes</div>
+                <div class="floorplan-wrapper" id="floorplanWrapper">
+                    <div class="upload-placeholder">
+                        <strong>Upload your floorplan image to begin mapping</strong><br>
+                        <small>Supported formats: JPG, PNG, GIF</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <div class="form-group">
+                    <label>Upload Floorplan Image</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="floorplanInput" accept="image/*">
+                        <label for="floorplanInput" class="file-input-label">
+                            📁 Choose Floorplan Image
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Set ID Prefixes (Set Once)</label>
+                    <div class="initials-grid">
+                        <div class="initials-group">
+                            <label>Desk Prefix</label>
+                            <input type="text" id="deskPrefix" placeholder="D" maxlength="5" value="D">
+                            <div class="preview-id" id="deskPreview">Next: D-001</div>
+                        </div>
+                        <div class="initials-group">
+                            <label>Meeting Room Prefix</label>
+                            <input type="text" id="meetingPrefix" placeholder="MR" maxlength="5" value="MR">
+                            <div class="preview-id" id="meetingPreview">Next: MR-001</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="current-mapping" id="currentMapping">
+                    <h4>Currently Mapping: <span id="currentType">Desk</span></h4>
+                    <div class="next-id" id="nextId">Next ID: D-001</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="itemType">Mapping Type</label>
+                    <select id="itemType">
+                        <option value="desk">Desk</option>
+                        <option value="meeting-room">Meeting Room</option>
+                    </select>
+                </div>
+
+                <div class="drawing-mode-info" id="drawingInfo">
+                    <strong>Auto ID Mode:</strong>
+                    1. Select mapping type above<br>
+                    2. Simply click and drag on the floorplan<br>
+                    3. ID will be auto-generated sequentially
+                </div>
+
+                <button class="button button-warning" onclick="MappingTool.toggleMode()">
+                    <span id="modeButtonText">Switch to Edit Mode</span>
+                </button>
+
+                <button class="button button-secondary" onclick="MappingTool.clearAll()">Clear All Areas</button>
+
+                <button class="button button-success" onclick="MappingTool.downloadCSV()">📥 Download CSV</button>
+
+                <div class="form-group">
+                    <label>Load Existing Mapping</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="csvInput" accept=".csv">
+                        <label for="csvInput" class="file-input-label">
+                            📄 Load CSV File
+                        </label>
+                    </div>
+                </div>
+
+                <div class="legend">
+                    <h4>Legend</h4>
+                    <div class="legend-item">
+                        <div class="legend-color desk"></div>
+                        <span>Desk Area</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color meeting-room"></div>
+                        <span>Meeting Room Area</span>
+                    </div>
+                </div>
+
+                <div class="data-table" id="dataTable">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Type</th>
+                                <th>X (px)</th>
+                                <th>Y (px)</th>
+                                <th>W (px)</th>
+                                <th>H (px)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="mapping_tool.js"></script>
+</body>
+</html>
