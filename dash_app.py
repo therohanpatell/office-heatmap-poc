@@ -52,33 +52,33 @@ def generate_legend_image(colormap_name):
         str: A base64 encoded PNG image string.
     """
     # Create a new Matplotlib figure and axes for the legend.
-    # The small size is optimized for display in the sidebar.
-    fig, ax = plt.subplots(figsize=(4, 1.5))
-    
+    # The small size is optimized for display below the heatmap.
+    fig, ax = plt.subplots(figsize=(6, 1.2))
+
     # Get the colormap object, either our custom one or a standard one.
     colormap = get_custom_colormap() if colormap_name == 'custom_gyr' else plt.get_cmap(colormap_name)
-    
+
     # Create a horizontal gradient to represent the colormap.
     gradient = np.linspace(0, 1, 256).reshape(1, 256)
     ax.imshow(gradient, aspect='auto', cmap=colormap)
 
     # Configure the legend's appearance.
-    ax.set_title("Usage Intensity")
+    ax.set_title("Usage Intensity", fontsize=12, pad=10)
     ax.set_xticks([0, 128, 255])
-    ax.set_xticklabels(['Low', 'Mid', 'High'])
+    ax.set_xticklabels(['Low', 'Medium', 'High'])
     ax.set_yticks([])  # Hide the y-axis ticks.
 
     # Save the figure to an in-memory buffer as a PNG.
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1, transparent=True)
     plt.close(fig)  # Close the figure to free up memory.
-    
+
     # Convert the PNG buffer to a base64 string for embedding in HTML.
     return pil_to_b64(Image.open(buf))
 
 
 def generate_heatmap_image(floor_plan_img, df_coords, df_bookings, start_date, end_date, desk_intensity, room_intensity,
-                           opacity, colormap_name, show_labels):
+                           opacity, colormap_name, show_labels, show_desks, show_rooms):
     """
     This is the main image generation function. It takes all the raw data and user inputs
     to produce the final heatmap visualization.
@@ -94,6 +94,8 @@ def generate_heatmap_image(floor_plan_img, df_coords, df_bookings, start_date, e
         opacity (float): The desired opacity for the heatmap layer.
         colormap_name (str): The name of the colormap to use.
         show_labels (bool): If True, asset labels will be drawn on the image.
+        show_desks (bool): If True, desk usage will be included in the heatmap.
+        show_rooms (bool): If True, meeting room usage will be included in the heatmap.
 
     Returns:
         str: A base64 encoded PNG image string of the final visualization.
@@ -127,7 +129,7 @@ def generate_heatmap_image(floor_plan_img, df_coords, df_bookings, start_date, e
     # --- 3. Heatmap Array Generation ---
     # Create a 2D numpy array with the same dimensions as the floor plan.
     heat_array = np.zeros((floor_plan_img.height, floor_plan_img.width))
-    
+
     # Normalize desk and room usage independently to balance their visual impact.
     # This prevents a very busy meeting room from overpowering all the desks.
     max_desk_usage = df_coords[df_coords['Type'] == 'desk']['raw_usage'].max()
@@ -136,13 +138,13 @@ def generate_heatmap_image(floor_plan_img, df_coords, df_bookings, start_date, e
     # Iterate over each asset and add its "heat" to the heat_array.
     for _, row in df_coords.iterrows():
         intensity = 0.0
-        # Calculate normalized intensity for desks.
-        if row['Type'] == 'desk' and max_desk_usage > 0:
+        # Calculate normalized intensity for desks (only if desks are enabled).
+        if row['Type'] == 'desk' and show_desks and max_desk_usage > 0:
             intensity = (row['raw_usage'] / max_desk_usage) * desk_intensity
-        # Calculate normalized intensity for meeting rooms.
-        elif row['Type'] == 'meeting-room' and max_room_usage > 0:
+        # Calculate normalized intensity for meeting rooms (only if rooms are enabled).
+        elif row['Type'] == 'meeting-room' and show_rooms and max_room_usage > 0:
             intensity = (row['raw_usage'] / max_room_usage) * room_intensity
-        
+
         # Add the calculated intensity to the corresponding area in the heat array.
         if intensity > 0:
             x, y, w, h = int(row['X_Pixels']), int(row['Y_Pixels']), int(row['Width_Pixels']), int(row['Height_Pixels'])
@@ -152,7 +154,7 @@ def generate_heatmap_image(floor_plan_img, df_coords, df_bookings, start_date, e
     # Apply a Gaussian blur to create the smooth, "blob-like" heatmap effect.
     # Sigma is the standard deviation for the Gaussian kernel, controlling the smoothness.
     blurred_heat = gaussian_filter(heat_array, sigma=40)
-    
+
     # Normalize the blurred array to a 0-1 range to be mapped to colors.
     normed_heat = (blurred_heat - blurred_heat.min()) / (
                 blurred_heat.max() - blurred_heat.min()) if blurred_heat.max() > 0 else blurred_heat
@@ -179,7 +181,14 @@ def generate_heatmap_image(floor_plan_img, df_coords, df_bookings, start_date, e
         except IOError:
             font = ImageFont.load_default()
 
-        for _, row in df_coords.iterrows():
+        # Filter coordinates based on what's being shown
+        coords_to_label = df_coords.copy()
+        if not show_desks:
+            coords_to_label = coords_to_label[coords_to_label['Type'] != 'desk']
+        if not show_rooms:
+            coords_to_label = coords_to_label[coords_to_label['Type'] != 'meeting-room']
+
+        for _, row in coords_to_label.iterrows():
             x, y, w, h = int(row['X_Pixels']), int(row['Y_Pixels']), int(row['Width_Pixels']), int(row['Height_Pixels'])
             item_id = str(row['ID'])
 
@@ -215,13 +224,13 @@ try:
     FLOOR_PLAN_IMG = Image.open(DEFAULT_FLOORPLAN_PATH)
     DF_COORDS = pd.read_csv(DEFAULT_COORDS_PATH)
     DF_BOOKINGS = pd.read_csv(DEFAULT_BOOKINGS_PATH)
-    
+
     # Calculate and store the overall min and max dates from the booking data.
     min_date_obj = pd.to_datetime(DF_BOOKINGS['BookingDate']).dt.date.min()
     max_date_obj = pd.to_datetime(DF_BOOKINGS['BookingDate']).dt.date.max()
     MIN_DATE = min_date_obj.isoformat()
     MAX_DATE = max_date_obj.isoformat()
-    
+
     DATA_LOADED_SUCCESSFULLY = True
 except (FileNotFoundError, pd.errors.EmptyDataError, KeyError) as e:
     # If any file is missing or corrupt, the app will display an error message.
@@ -267,8 +276,6 @@ def create_main_layout():
                     value='custom_gyr',
                     clearable=False
                 ),
-                html.Img(id='legend-image', src=generate_legend_image('custom_gyr'),
-                         style={'width': '100%', 'margin-top': '15px'}),
                 html.Hr(),
                 dbc.Checklist(
                     options=[{"label": "Show Labels on Heatmap", "value": 1}],
@@ -309,6 +316,26 @@ def create_main_layout():
         ])
     ])
 
+    # Define the card containing asset type filters (NEW)
+    asset_filter_controls = dbc.Card([
+        dbc.CardBody([
+            dbc.Label("Show Asset Types", className="fw-bold mb-3"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Checklist(
+                        options=[
+                            {"label": "🖥️ Desks", "value": "desks"},
+                            {"label": "🏢 Meeting Rooms", "value": "rooms"}
+                        ],
+                        value=["desks", "rooms"],  # Both selected by default
+                        id="asset-type-filter",
+                        switch=True,
+                    ),
+                ], width=12),
+            ]),
+        ])
+    ])
+
     # Assemble the final page layout using a fluid Bootstrap container.
     return dbc.Container([
         controls_sidebar,
@@ -317,7 +344,8 @@ def create_main_layout():
             dbc.Col(dbc.Button("⚙️ Controls", id="btn-open-controls", n_clicks=0, className="my-4"), width=2)
         ]),
         dbc.Row([
-            dbc.Col(date_controls, width=12, className="mb-4")
+            dbc.Col(date_controls, width=8, className="mb-4"),
+            dbc.Col(asset_filter_controls, width=4, className="mb-4"),
         ]),
         dbc.Row([
             dbc.Col(
@@ -326,6 +354,16 @@ def create_main_layout():
                     id="loading-heatmap",
                     type="default",
                     children=html.Img(id='heatmap-image', style={'width': '100%', 'height': 'auto'})
+                ),
+                width=12
+            )
+        ]),
+        dbc.Row([
+            dbc.Col(
+                html.Div(
+                    html.Img(id='legend-image', src=generate_legend_image('custom_gyr'),
+                             style={'width': '100%', 'max-width': '600px', 'height': 'auto', 'display': 'block', 'margin': '0 auto'}),
+                    className="text-center mt-3"
                 ),
                 width=12
             )
@@ -368,18 +406,23 @@ app.layout = create_main_layout() if DATA_LOADED_SUCCESSFULLY else create_error_
         Input('room-intensity-slider', 'value'),
         Input('opacity-slider', 'value'),
         Input('colormap-dropdown', 'value'),
-        Input('labels-switch', 'value')
+        Input('labels-switch', 'value'),
+        Input('asset-type-filter', 'value')  # NEW: Asset type filter input
     ],
     # This prevents the callback from running on initial page load if data isn't ready.
     prevent_initial_call=not DATA_LOADED_SUCCESSFULLY
 )
-def update_heatmap(start_date, end_date, desk_intensity, room_intensity, opacity, colormap, show_labels):
+def update_heatmap(start_date, end_date, desk_intensity, room_intensity, opacity, colormap, show_labels, asset_types):
     """
     This is the primary callback. It listens for changes to any of the control
     components and regenerates the heatmap image accordingly.
     """
     # The 'show_labels' value is a list; we convert it to a simple boolean.
     show_labels_bool = True if 1 in show_labels else False
+
+    # Convert asset type filter to boolean flags
+    show_desks = "desks" in asset_types if asset_types else False
+    show_rooms = "rooms" in asset_types if asset_types else False
 
     # Create safe copies of the dataframes to prevent modifying the original data.
     df_coords_copy = DF_COORDS.copy() if DF_COORDS is not None else None
@@ -389,7 +432,8 @@ def update_heatmap(start_date, end_date, desk_intensity, room_intensity, opacity
     return generate_heatmap_image(
         FLOOR_PLAN_IMG, df_coords_copy, df_bookings_copy,
         start_date, end_date,
-        desk_intensity, room_intensity, opacity, colormap, show_labels_bool
+        desk_intensity, room_intensity, opacity, colormap, show_labels_bool,
+        show_desks, show_rooms  # NEW: Pass the asset type filters
     )
 
 
@@ -427,7 +471,7 @@ def update_date_picker_from_presets(btn7, btn30, btn90, btn_all):
     """
     Updates the start and end dates of the DatePickerRange when a preset button is clicked.
     """
-    # `dash.callback_context` tells us which button triggered the callback.
+    # `dash.callback_context` tells us which users which button triggered the callback.
     ctx = dash.callback_context
     if not ctx.triggered or not DATA_LOADED_SUCCESSFULLY or not MIN_DATE or not MAX_DATE:
         return no_update, no_update
@@ -463,4 +507,4 @@ if __name__ == '__main__':
     # For production, debug=False is crucial as it disables verbose error messages
     # that could be a security risk. A production-grade WSGI server like Gunicorn
     # should be used to run the app instead of Dash's built-in development server.
-    app.run(debug=False) 
+    app.run(debug=False)
