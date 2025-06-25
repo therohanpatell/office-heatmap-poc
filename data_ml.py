@@ -25,11 +25,13 @@ from sklearn.mixture import GaussianMixture
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 import warnings
+
 warnings.filterwarnings('ignore')
 
 try:
     from tensorflow.keras.models import Sequential
     from tensorflow.keras.layers import LSTM, Dense, Dropout
+
     KERAS_AVAILABLE = True
 except ImportError:
     KERAS_AVAILABLE = False
@@ -110,26 +112,26 @@ class MLBookingDataGenerator:
 
         # Monthly patterns (seasonal effects)
         self.monthly_pattern = np.array([
-            0.9,   # Jan - New year ramp up
-            1.0,   # Feb - Normal
-            1.1,   # Mar - Q1 end push
-            1.0,   # Apr - Normal
+            0.9,  # Jan - New year ramp up
+            1.0,  # Feb - Normal
+            1.1,  # Mar - Q1 end push
+            1.0,  # Apr - Normal
             0.95,  # May - Spring slowdown
-            1.1,   # Jun - Q2 end push
-            0.7,   # Jul - Summer vacation
-            0.7,   # Aug - Summer vacation
-            1.1,   # Sep - Back to work push
-            1.0,   # Oct - Normal
+            1.1,  # Jun - Q2 end push
+            0.7,  # Jul - Summer vacation
+            0.7,  # Aug - Summer vacation
+            1.1,  # Sep - Back to work push
+            1.0,  # Oct - Normal
             0.95,  # Nov - Pre-holiday
-            0.6    # Dec - Holiday season
+            0.6  # Dec - Holiday season
         ])
 
         # Create Markov chain for recurring patterns
         self.recurring_meeting_probability = {
-            'daily': 0.15,      # Daily standups
-            'weekly': 0.25,     # Weekly team meetings
+            'daily': 0.15,  # Daily standups
+            'weekly': 0.25,  # Weekly team meetings
             'bi_weekly': 0.10,  # Bi-weekly reviews
-            'monthly': 0.05     # Monthly all-hands
+            'monthly': 0.05  # Monthly all-hands
         }
 
     def setup_asset_features(self):
@@ -352,7 +354,8 @@ class MLBookingDataGenerator:
                 # Score each date for booking probability
                 date_scores = []
                 for date in all_dates:
-                    if date.strftime('%Y-%m-%d') not in bookings_df[bookings_df['ID'] == asset_id]['BookingDate'].values:
+                    if date.strftime('%Y-%m-%d') not in bookings_df[bookings_df['ID'] == asset_id][
+                        'BookingDate'].values:
                         time_features = self.get_time_features(date)
                         score = time_features['temporal_modifier']
                         date_scores.append((date, score))
@@ -401,7 +404,7 @@ class MLBookingDataGenerator:
             date_str = date_obj.strftime('%Y-%m-%d')
 
             if i % 50 == 0:
-                print(f"Processing date {i+1}/{total_business_days}: {date_str}")
+                print(f"Processing date {i + 1}/{total_business_days}: {date_str}")
 
             daily_bookings = []
 
@@ -483,9 +486,9 @@ class MLBookingDataGenerator:
 
         print(f"\n--- Desk Usage Statistics ---")
         print(f"Total desk bookings: {len(desk_bookings):,}")
-        print(f"Average usage per desk: {desk_usage.mean():.1f} days ({desk_usage.mean()/total_business_days:.1%})")
-        print(f"Minimum usage: {desk_usage.min()} days ({desk_usage.min()/total_business_days:.1%})")
-        print(f"Maximum usage: {desk_usage.max()} days ({desk_usage.max()/total_business_days:.1%})")
+        print(f"Average usage per desk: {desk_usage.mean():.1f} days ({desk_usage.mean() / total_business_days:.1%})")
+        print(f"Minimum usage: {desk_usage.min()} days ({desk_usage.min() / total_business_days:.1%})")
+        print(f"Maximum usage: {desk_usage.max()} days ({desk_usage.max() / total_business_days:.1%})")
         print(f"Desks meeting 30% minimum: {(desk_usage >= total_business_days * 0.3).sum()}/{len(self.desk_ids)}")
 
         # Meeting room statistics
@@ -495,9 +498,9 @@ class MLBookingDataGenerator:
 
         print(f"\n--- Meeting Room Statistics ---")
         print(f"Total meeting room bookings: {len(mr_bookings):,}")
-        print(f"Average bookings per room: {mr_usage.mean():.1f} days ({mr_usage.mean()/total_business_days:.1%})")
+        print(f"Average bookings per room: {mr_usage.mean():.1f} days ({mr_usage.mean() / total_business_days:.1%})")
         print(f"Average duration per booking: {mr_bookings['MinutesBooked'].mean():.0f} minutes")
-        print(f"Total meeting hours: {mr_duration.sum()/60:.1f} hours")
+        print(f"Total meeting hours: {mr_duration.sum() / 60:.1f} hours")
 
         # Weekly patterns
         bookings_df['WeekDay'] = pd.to_datetime(bookings_df['BookingDate']).dt.day_name()
@@ -517,7 +520,7 @@ class MLBookingDataGenerator:
             persona_counts[persona] = persona_counts.get(persona, 0) + 1
 
         for persona, count in sorted(persona_counts.items()):
-            print(f"{persona}: {count} users ({count/len(self.users):.1%})")
+            print(f"{persona}: {count} users ({count / len(self.users):.1%})")
 
         print(f"\n=== Dataset Generation Complete ===")
 
